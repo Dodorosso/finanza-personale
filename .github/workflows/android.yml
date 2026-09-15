@@ -15,11 +15,8 @@ jobs:
           distribution: temurin
           java-version: "17"
       - uses: android-actions/setup-android@v3
+        continue-on-error: true
       - uses: gradle/actions/setup-gradle@v4
-      - name: Accept and install Android SDK packages
-        run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
       - name: Sync web app
         run: cp index.html app/src/main/assets/fire.html
       - name: Build debug APK
