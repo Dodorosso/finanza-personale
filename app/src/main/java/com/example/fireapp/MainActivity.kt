@@ -98,13 +98,13 @@ class MainActivity : AppCompatActivity() {
         } else {
             super.onBackPressed()
         }
+    }
 
-        override fun onResume() {
-            super.onResume()
-            if (resumedOnce && biometricPrefs.getBoolean("enabled", false)) {
-                authenticateBiometric()
-            }
-            resumedOnce = true
+    override fun onResume() {
+        super.onResume()
+        if (resumedOnce && biometricPrefs.getBoolean("enabled", false)) {
+            authenticateBiometric()
         }
+        resumedOnce = true
     }
 }
