@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat
 
 class MainActivity : AppCompatActivity() {
     private lateinit var webView: WebView
+    private var resumedOnce = false
     private val biometricPrefs by lazy { getSharedPreferences("piggybanky-security", MODE_PRIVATE) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -96,6 +97,14 @@ class MainActivity : AppCompatActivity() {
             webView.goBack()
         } else {
             super.onBackPressed()
+        }
+
+        override fun onResume() {
+            super.onResume()
+            if (resumedOnce && biometricPrefs.getBoolean("enabled", false)) {
+                authenticateBiometric()
+            }
+            resumedOnce = true
         }
     }
 }
