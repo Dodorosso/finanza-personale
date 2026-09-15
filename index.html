@@ -291,6 +291,7 @@
     document.getElementById('removePinBtn').addEventListener('click', () => { if (!pinEnabled()) return; if (confirm('Disattivare la protezione PIN?')) { localStorage.removeItem(PIN_KEY); updatePinStatus(); toast('Protezione PIN disattivata'); } });
     document.getElementById('biometricBtn').addEventListener('click', () => { const bridge = nativeSecurity(); if (!bridge) return; if (bridge.isEnabled()) { bridge.disable(); toast('Biometria Android disattivata'); } else { bridge.enable(); toast('Conferma la biometria nella finestra Android'); } updateNativeSecurity(); });
     document.getElementById('pinUnlockForm').addEventListener('submit', async e => { e.preventDefault(); const input = document.getElementById('unlockPin'); try { if ((await hashPin(input.value)) === localStorage.getItem(PIN_KEY)) { document.getElementById('pinLock').classList.add('hidden'); document.getElementById('pinLock').classList.remove('flex'); input.value = ''; document.getElementById('pinError').classList.add('hidden'); } else { document.getElementById('pinError').classList.remove('hidden'); input.select(); } } catch { document.getElementById('pinError').textContent = 'Impossibile verificare il PIN in questo contesto.'; document.getElementById('pinError').classList.remove('hidden'); } });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && pinEnabled()) lockApp(); });
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       navigator.serviceWorker.register('./sw.js').catch(() => {});
     }
