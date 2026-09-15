@@ -1,5 +1,5 @@
-const CACHE = 'finanza-spa-v1';
-const APP_SHELL = ['./', './index.html', './manifest.webmanifest', './icons/icon.svg'];
+const CACHE = 'piggybanky-v2';
+const APP_SHELL = ['./', './index.html', './manifest.webmanifest', './icons/piggybaky.png'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(APP_SHELL)));
