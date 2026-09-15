@@ -1,0 +1,19 @@
+{
+  "name": "Finanza personale 50/30/20",
+  "short_name": "Finanza",
+  "description": "Gestione personale di patrimonio, spese e budget 50/30/20",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#080d1a",
+  "theme_color": "#080d1a",
+  "icons": [
+    {
+      "src": "./icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
