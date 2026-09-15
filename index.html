@@ -8,6 +8,340 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icons/piggybaky.png?v=2" type="image/png">
   <link rel="apple-touch-icon" href="./icons/piggybaky.png?v=2">
+  <title>PiggyBanky Â· Budget personale</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { ink: '#080d1a', panel: '#111827', muted: '#94a3b8', accent: '#7c3aed', mint: '#34d399' },
+          boxShadow: { glow: '0 0 32px rgba(124,58,237,.22)' }
+        }
+      }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <style>
+    * { -webkit-tap-highlight-color: transparent; }
+    body { background: #080d1a; color: #f8fafc; padding-bottom: 92px; }
+    input, select, textarea { color-scheme: dark; }
+    .glass { background: rgba(17,24,39,.82); border: 1px solid rgba(148,163,184,.13); backdrop-filter: blur(14px); }
+    .input { width: 100%; border-radius: .85rem; border: 1px solid #263244; background: #0c1424; padding: .75rem .9rem; outline: none; transition: .2s; }
+    .input:focus { border-color: #8b5cf6; box-shadow: 0 0 0 3px rgba(139,92,246,.16); }
+    .btn { min-height: 44px; border-radius: .85rem; padding: .7rem 1rem; font-weight: 700; transition: transform .15s, filter .15s; }
+    .btn:active { transform: scale(.97); }
+    .btn-primary { background: #7c3aed; }
+    .btn-primary:hover { filter: brightness(1.12); }
+    .btn-quiet { background: #1e293b; color: #cbd5e1; }
+    .btn-danger { color: #fda4af; background: rgba(127,29,29,.22); }
+    .nav-item.active { color: #c4b5fd; background: rgba(124,58,237,.18); }
+    .progress { height: 9px; border-radius: 999px; background: #253146; overflow: hidden; }
+    .progress > span { display: block; height: 100%; border-radius: inherit; transition: width .35s ease; }
+    .toast { animation: toast-in .25s ease-out; }
+    @keyframes toast-in { from { transform: translateY(12px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+    .section { display: none; }
+    .section.active { display: block; }
+    #pinLock { background: rgba(8,13,26,.96); }
+  </style>
+</head>
+<body class="min-h-screen">
+  <header class="sticky top-0 z-30 border-b border-slate-800/80 bg-ink/90 px-4 pt-4 pb-3 backdrop-blur-xl">
+    <div class="mx-auto flex max-w-5xl items-center justify-between">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-[.2em] text-amber-300">PiggyBanky</p>
+        <h1 class="mt-1 text-xl font-bold tracking-tight">Il tuo patrimonio</h1>
+      </div>
+      <button id="headerExport" class="btn btn-quiet flex items-center gap-2 text-sm" title="Esporta backup">â†— <span class="hidden sm:inline">Backup</span></button>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-5xl px-4 py-5">
+    <section id="dashboard" class="section active space-y-5">
+      <div class="grid gap-3 sm:grid-cols-3">
+        <div class="glass rounded-2xl p-4 shadow-glow sm:col-span-2">
+          <p class="text-sm text-slate-400">Patrimonio netto stimato</p>
+          <div class="mt-2 flex items-end justify-between gap-3">
+            <p id="netWorth" class="text-3xl font-black tracking-tight">â‚¬ 0,00</p>
+            <span id="netWorthHint" class="rounded-full bg-emerald-400/10 px-2.5 py-1 text-xs font-semibold text-emerald-300">Aggiornato ora</span>
+          </div>
+          <div class="mt-4 grid grid-cols-3 gap-2 text-xs">
+            <div><span class="block text-slate-500">LiquiditÃ </span><b id="dashCash">â‚¬ 0</b></div>
+            <div><span class="block text-slate-500">Investimenti</span><b id="dashInvestments">â‚¬ 0</b></div>
+            <div><span class="block text-slate-500">Spese mese</span><b id="dashExpenses">â‚¬ 0</b></div>
+          </div>
+        </div>
+        <div class="glass rounded-2xl p-4">
+          <p class="text-sm text-slate-400">Entrata netta mensile</p>
+          <p id="dashIncome" class="mt-2 text-2xl font-black">â‚¬ 0,00</p>
+          <p class="mt-2 text-xs text-slate-500">Impostala nelle impostazioni</p>
+        </div>
+      </div>
+
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="glass rounded-2xl p-4">
+          <div class="mb-3 flex items-center justify-between"><h2 class="font-bold">Patrimonio</h2><span class="text-xs text-slate-500">Distribuzione</span></div>
+          <div class="mx-auto h-56 max-w-xs"><canvas id="wealthChart"></canvas></div>
+        </div>
+        <div class="glass rounded-2xl p-4">
+          <div class="flex items-center justify-between"><h2 class="font-bold">Riepilogo mese</h2><span id="monthLabel" class="text-xs text-slate-500"></span></div>
+          <div class="mt-4 space-y-3">
+            <div class="flex items-center justify-between"><span class="text-slate-400">Spese fisse</span><b id="dashFixed">â‚¬ 0</b></div>
+            <div class="flex items-center justify-between"><span class="text-slate-400">Margine residuo</span><b id="dashMargin" class="text-emerald-300">â‚¬ 0</b></div>
+            <div class="h-px bg-slate-800"></div>
+            <p class="text-xs text-slate-500">Il margine considera entrate meno spese variabili e fisse del mese.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass rounded-2xl p-4">
+        <div class="mb-4 flex items-start justify-between"><div><h2 class="font-bold">Budget personalizzato</h2><p class="mt-1 text-xs text-slate-500">Spese del mese in corso rispetto ai target teorici</p></div><button id="budgetSettingsBtn" class="btn btn-quiet px-3 text-xs text-amber-200">Regola budget</button></div>
+        <div id="budgetBars" class="space-y-4"></div>
+      </div>
+    </section>
+
+    <section id="expenses" class="section space-y-5">
+      <div><p class="text-xs font-semibold uppercase tracking-[.2em] text-violet-300">Movimenti</p><h2 class="mt-1 text-2xl font-black">Spese variabili</h2></div>
+      <form id="expenseForm" class="glass grid gap-3 rounded-2xl p-4 sm:grid-cols-2">
+        <label class="text-sm text-slate-300">Importo (â‚¬)<input class="input mt-1" name="amount" type="number" min="0.01" step="0.01" required placeholder="25,00"></label>
+        <label class="text-sm text-slate-300">Categoria<input class="input mt-1" name="category" required placeholder="Spesa alimentare"></label>
+        <label class="text-sm text-slate-300">Data<input class="input mt-1" name="date" type="date" required></label>
+        <label class="text-sm text-slate-300">Macro-tipologia<select class="input mt-1" name="macro"><option>NecessitÃ </option><option>Desideri</option><option>Risparmio/Investimento</option></select></label>
+        <label class="text-sm text-slate-300 sm:col-span-2">Note<textarea class="input mt-1" name="note" rows="2" placeholder="Dettagli facoltativi"></textarea></label>
+        <button class="btn btn-primary sm:col-span-2" type="submit">+ Aggiungi spesa</button>
+      </form>
+      <div class="glass rounded-2xl p-4"><div class="mb-3 flex items-center justify-between"><h2 class="font-bold">Ultime spese</h2><span id="expenseTotal" class="text-sm text-slate-400"></span></div><div id="expenseList" class="space-y-2"></div></div>
+    </section>
+
+    <section id="fixed" class="section space-y-5">
+      <div><p class="text-xs font-semibold uppercase tracking-[.2em] text-violet-300">Ricorrenze</p><h2 class="mt-1 text-2xl font-black">Spese fisse</h2></div>
+      <form id="fixedForm" class="glass grid gap-3 rounded-2xl p-4 sm:grid-cols-2">
+        <label class="text-sm text-slate-300">Nome<input class="input mt-1" name="name" required placeholder="Affitto"></label>
+        <label class="text-sm text-slate-300">Importo (â‚¬)<input class="input mt-1" name="amount" type="number" min="0.01" step="0.01" required placeholder="800"></label>
+        <label class="text-sm text-slate-300">Frequenza<select class="input mt-1" name="frequency"><option value="monthly">Mensile</option><option value="quarterly">Trimestrale</option><option value="annual">Annuale</option></select></label>
+        <label class="text-sm text-slate-300">Giorno addebito<input class="input mt-1" name="day" type="number" min="1" max="31" value="1" required></label>
+        <label class="text-sm text-slate-300">Categoria<input class="input mt-1" name="category" required placeholder="Casa"></label>
+        <label class="text-sm text-slate-300">Macro-tipologia<select class="input mt-1" name="macro"><option>NecessitÃ </option><option>Desideri</option><option>Risparmio/Investimento</option></select></label>
+        <button class="btn btn-primary sm:col-span-2" type="submit">+ Aggiungi spesa fissa</button>
+      </form>
+      <div class="grid gap-3 sm:grid-cols-2"><div class="glass rounded-2xl p-4"><span class="text-sm text-slate-400">Uscite mensili equivalenti</span><b id="fixedMonthly" class="mt-1 block text-2xl">â‚¬ 0</b></div><div class="glass rounded-2xl p-4"><span class="text-sm text-slate-400">Uscite annualizzate</span><b id="fixedAnnual" class="mt-1 block text-2xl">â‚¬ 0</b></div></div>
+      <div id="fixedList" class="space-y-3"></div>
+    </section>
+
+    <section id="capital" class="section space-y-5">
+      <div><p class="text-xs font-semibold uppercase tracking-[.2em] text-violet-300">LiquiditÃ </p><h2 class="mt-1 text-2xl font-black">I tuoi conti</h2></div>
+      <form id="accountForm" class="glass grid gap-3 rounded-2xl p-4 sm:grid-cols-2"><label class="text-sm text-slate-300">Nome conto<input class="input mt-1" name="name" required placeholder="Conto principale"></label><label class="text-sm text-slate-300">Saldo (â‚¬)<input class="input mt-1" name="balance" type="number" step="0.01" required placeholder="2500"></label><button class="btn btn-primary sm:col-span-2" type="submit">+ Aggiungi conto</button></form>
+      <div id="accountList" class="grid gap-3 sm:grid-cols-2"></div>
+    </section>
+
+    <section id="investments" class="section space-y-5">
+      <div><p class="text-xs font-semibold uppercase tracking-[.2em] text-violet-300">Portafoglio</p><h2 class="mt-1 text-2xl font-black">Investimenti</h2></div>
+      <form id="investmentForm" class="glass grid gap-3 rounded-2xl p-4 sm:grid-cols-2"><label class="text-sm text-slate-300">Nome / Ticker<input class="input mt-1" name="name" required placeholder="VWCE"></label><label class="text-sm text-slate-300">QuantitÃ <input class="input mt-1" name="quantity" type="number" min="0" step="any" required placeholder="10"></label><label class="text-sm text-slate-300">PMC (â‚¬)<input class="input mt-1" name="cost" type="number" min="0" step="0.01" required placeholder="100"></label><label class="text-sm text-slate-300">Valore attuale (â‚¬)<input class="input mt-1" name="value" type="number" min="0" step="0.01" required placeholder="115"></label><button class="btn btn-primary sm:col-span-2" type="submit">+ Aggiungi asset</button></form>
+      <div id="investmentList" class="space-y-3"></div>
+    </section>
+
+    <section id="settings" class="section space-y-5">
+      <div><p class="text-xs font-semibold uppercase tracking-[.2em] text-violet-300">Preferenze</p><h2 class="mt-1 text-2xl font-black">Impostazioni & dati</h2></div>
+      <form id="settingsForm" class="glass rounded-2xl p-4"><label class="text-sm text-slate-300">Entrata mensile netta di riferimento (â‚¬)<input id="incomeInput" class="input mt-1" type="number" min="0" step="0.01" placeholder="2500"></label><button class="btn btn-primary mt-3 w-full" type="submit">Salva entrata</button></form>
+      <div class="glass rounded-2xl p-4"><div class="flex items-start justify-between gap-3"><div><h2 class="font-bold">Protezione app</h2><p id="pinStatus" class="mt-1 text-sm text-slate-400">Accesso protetto da PIN disattivato.</p></div><span class="rounded-full bg-amber-400/10 px-2 py-1 text-xs text-amber-200">Locale</span></div><div class="mt-4 grid gap-2 sm:grid-cols-3"><button id="setPinBtn" class="btn btn-quiet">Imposta PIN</button><button id="removePinBtn" class="btn btn-danger">Disattiva PIN</button><button id="biometricBtn" class="btn btn-quiet hidden">Attiva impronta</button></div><p id="biometricStatus" class="mt-3 hidden text-sm text-emerald-300">Biometria Android attiva.</p><p class="mt-3 text-xs text-slate-500">Il PIN non viene salvato: viene memorizzato solo un hash sul dispositivo. Nell'APK puoi usare anche impronta o PIN del dispositivo Android.</p></div>
+      <div class="glass rounded-2xl p-4"><h2 class="font-bold">Backup locale</h2><p class="mt-1 text-sm text-slate-400">Esporta un file JSON oppure ripristina un backup esistente.</p><div class="mt-4 grid gap-2 sm:grid-cols-2"><button id="exportBtn" class="btn btn-quiet">â†“ Esporta JSON</button><label class="btn btn-quiet cursor-pointer text-center">â†‘ Importa JSON<input id="importInput" type="file" accept=".json,application/json" class="hidden"></label></div><button id="resetBtn" class="btn btn-danger mt-3 w-full">Svuota tutti i dati</button></div>
+    </section>
+  </main>
+
+  <nav class="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-800/90 bg-[#0b1120]/95 px-2 pb-[max(.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl">
+    <div class="mx-auto grid max-w-5xl grid-cols-6 gap-1">
+      <button class="nav-item active rounded-xl px-1 py-2 text-[11px] text-slate-400" data-section="dashboard">âŒ‚<span class="mt-0.5 block">Home</span></button>
+      <button class="nav-item rounded-xl px-1 py-2 text-[11px] text-slate-400" data-section="expenses">â†˜<span class="mt-0.5 block">Spese</span></button>
+      <button class="nav-item rounded-xl px-1 py-2 text-[11px] text-slate-400" data-section="fixed">â†»<span class="mt-0.5 block">Fisse</span></button>
+      <button class="nav-item rounded-xl px-1 py-2 text-[11px] text-slate-400" data-section="capital">â–£<span class="mt-0.5 block">Conti</span></button>
+      <button class="nav-item rounded-xl px-1 py-2 text-[11px] text-slate-400" data-section="investments">â—ˆ<span class="mt-0.5 block">Asset</span></button>
+      <button class="nav-item rounded-xl px-1 py-2 text-[11px] text-slate-400" data-section="settings">âš™<span class="mt-0.5 block">Dati</span></button>
+    </div>
+  </nav>
+  <div id="budgetModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 p-4">
+    <form id="budgetForm" class="glass w-full max-w-sm rounded-2xl p-5">
+      <div class="flex items-start justify-between"><div><h2 class="text-lg font-bold">Regola budget</h2><p class="mt-1 text-xs text-slate-400">Le percentuali devono sommare a 100%.</p></div><button type="button" id="closeBudgetModal" class="btn btn-quiet px-3">Ã—</button></div>
+      <div class="mt-4 grid grid-cols-3 gap-2">
+        <label class="text-xs text-slate-300">NecessitÃ  %<input id="needsPercent" class="input mt-1" type="number" min="0" max="100" step="1"></label>
+        <label class="text-xs text-slate-300">Desideri %<input id="wantsPercent" class="input mt-1" type="number" min="0" max="100" step="1"></label>
+        <label class="text-xs text-slate-300">Risparmi %<input id="savingsPercent" class="input mt-1" type="number" min="0" max="100" step="1"></label>
+      </div>
+      <button class="btn btn-primary mt-4 w-full" type="submit">Salva proporzioni</button>
+    </form>
+  </div>
+  <div id="pinLock" class="fixed inset-0 z-[60] hidden items-center justify-center p-5">
+    <form id="pinUnlockForm" class="glass w-full max-w-sm rounded-2xl p-5">
+      <p class="text-xs font-semibold uppercase tracking-[.2em] text-amber-300">PiggyBanky</p>
+      <h2 class="mt-2 text-xl font-bold">App protetta</h2>
+      <p class="mt-1 text-sm text-slate-400">Inserisci il PIN per accedere ai tuoi dati.</p>
+      <input id="unlockPin" class="input mt-4" type="password" inputmode="numeric" autocomplete="current-password" minlength="4" required placeholder="PIN">
+      <p id="pinError" class="mt-2 hidden text-sm text-rose-300">PIN non corretto.</p>
+      <button class="btn btn-primary mt-4 w-full" type="submit">Sblocca</button>
+    </form>
+  </div>
+  <div id="pinSetup" class="fixed inset-0 z-[60] hidden items-center justify-center bg-black/70 p-5">
+    <form id="pinSetupForm" class="glass w-full max-w-sm rounded-2xl p-5">
+      <div class="flex items-start justify-between"><div><h2 class="text-lg font-bold">Imposta PIN</h2><p class="mt-1 text-xs text-slate-400">Scegli almeno 4 cifre per proteggere l'app.</p></div><button type="button" id="closePinSetup" class="btn btn-quiet px-3">Ã—</button></div>
+      <input id="newPin" class="input mt-4" type="password" inputmode="numeric" autocomplete="new-password" minlength="4" required placeholder="Nuovo PIN">
+      <input id="confirmPin" class="input mt-2" type="password" inputmode="numeric" autocomplete="new-password" minlength="4" required placeholder="Conferma PIN">
+      <p id="pinSetupError" class="mt-2 hidden text-sm text-rose-300"></p>
+      <button class="btn btn-primary mt-4 w-full" type="submit">Attiva protezione</button>
+    </form>
+  </div>
+  <div id="securitySetup" class="fixed inset-0 z-[59] hidden items-center justify-center bg-black/70 p-5">
+    <div class="glass w-full max-w-sm rounded-2xl p-5">
+      <p class="text-xs font-semibold uppercase tracking-[.2em] text-amber-300">PiggyBanky</p>
+      <h2 class="mt-2 text-xl font-bold">Proteggi la tua app</h2>
+      <p class="mt-1 text-sm text-slate-400">Al primo avvio scegli come proteggere i tuoi dati. Potrai cambiare questa scelta in qualsiasi momento.</p>
+      <div id="securitySetupActions" class="mt-5 grid gap-2">
+        <button id="firstRunPinBtn" class="btn btn-primary w-full">Imposta un PIN</button>
+        <button id="firstRunBiometricBtn" class="btn btn-quiet hidden w-full">Attiva impronta / biometria</button>
+        <button id="skipSecurityBtn" class="btn btn-quiet w-full">Continua senza protezione</button>
+      </div>
+      <p id="securitySetupHint" class="mt-3 text-xs text-slate-500">La protezione Ã¨ consigliata perchÃ© lâ€™app contiene dati finanziari.</p>
+    </div>
+  </div>
+  <div id="toastRoot" class="fixed bottom-24 left-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2"></div>
+
+  <script>
+    const STORAGE_KEY = 'finanza-personale-v1';
+    const PIN_KEY = 'piggybanky-pin-hash-v1';
+    const SECURITY_SETUP_KEY = 'piggybanky-security-setup-v1';
+    const today = new Date();
+    const euro = n => new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0);
+    const id = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+    const monthKey = d => String(d || '').slice(0, 7);
+    const currentMonth = today.toISOString().slice(0, 7);
+    const defaultState = { income: 0, budget: { needs: 50, wants: 30, savings: 20 }, accounts: [], investments: [], expenses: [], fixed: [] };
+    let state = loadState();
+    state.budget = { ...defaultState.budget, ...(state.budget || {}) };
+    let wealthChart;
+    let pinSetupFromOnboarding = false;
+    const frequencyLabel = { monthly: 'Mensile', quarterly: 'Trimestrale', annual: 'Annuale' };
+    const monthlyFactor = { monthly: 1, quarterly: 1 / 3, annual: 1 / 12 };
+    function loadState() { try { return { ...defaultState, ...JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') }; } catch { return { ...defaultState }; } }
+    function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); render(); }
+    async function hashPin(pin) { if (crypto.subtle) { const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin)); return [...new Uint8Array(bytes)].map(x => x.toString(16).padStart(2, '0')).join(''); } let hash = 2166136261; for (let round = 0; round < 2048; round++) { for (const char of `${pin}:piggybanky:${round}`) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619); } return `fallback-${(hash >>> 0).toString(16)}`; }
+    function pinEnabled() { return Boolean(localStorage.getItem(PIN_KEY)); }
+    function securityConfigured() { return localStorage.getItem(SECURITY_SETUP_KEY) === 'configured'; }
+    function completeSecuritySetup() { localStorage.setItem(SECURITY_SETUP_KEY, 'configured'); closeSecuritySetup(); }
+    function nativeSecurity() { return window.PiggyBankySecurity; }
+    function updateNativeSecurity() { const bridge = nativeSecurity(); const button = document.getElementById('biometricBtn'); if (!bridge || !bridge.isAvailable()) return; button.classList.remove('hidden'); const enabled = bridge.isEnabled(); button.textContent = enabled ? 'Disattiva impronta' : 'Attiva impronta'; document.getElementById('biometricStatus').classList.toggle('hidden', !enabled); }
+    function updatePinStatus() { const enabled = pinEnabled(); document.getElementById('pinStatus').textContent = enabled ? 'Accesso protetto da PIN attivo su questo dispositivo.' : 'Accesso protetto da PIN disattivato.'; document.getElementById('removePinBtn').disabled = !enabled; document.getElementById('removePinBtn').style.opacity = enabled ? '1' : '.5'; }
+    function showPinSetup(fromOnboarding = false) { pinSetupFromOnboarding = fromOnboarding; document.getElementById('pinSetupError').classList.add('hidden'); document.getElementById('pinSetupForm').reset(); document.getElementById('pinSetup').classList.remove('hidden'); document.getElementById('pinSetup').classList.add('flex'); document.getElementById('newPin').focus(); }
+    function closePinSetup() { document.getElementById('pinSetup').classList.add('hidden'); document.getElementById('pinSetup').classList.remove('flex'); }
+    function closeSecuritySetup() { document.getElementById('securitySetup').classList.add('hidden'); document.getElementById('securitySetup').classList.remove('flex'); }
+    function showSecuritySetup() { const bridge = nativeSecurity(); const biometricButton = document.getElementById('firstRunBiometricBtn'); const available = Boolean(bridge && bridge.isAvailable && bridge.isAvailable()); biometricButton.classList.toggle('hidden', !available); document.getElementById('securitySetup').classList.remove('hidden'); document.getElementById('securitySetup').classList.add('flex'); }
+    function lockApp() { if (nativeSecurity() && nativeSecurity().isEnabled()) return; if (!pinEnabled()) return; document.getElementById('pinLock').classList.remove('hidden'); document.getElementById('pinLock').classList.add('flex'); document.getElementById('unlockPin').focus(); }
+    function toast(message, danger = false) { const root = document.getElementById('toastRoot'); root.innerHTML = `<div class="toast rounded-xl border ${danger ? 'border-rose-400/30 bg-rose-950/90 text-rose-200' : 'border-emerald-400/30 bg-emerald-950/90 text-emerald-200'} px-4 py-3 text-sm shadow-xl">${message}</div>`; setTimeout(() => root.innerHTML = '', 2800); }
+    function monthlyFixed() { return state.fixed.reduce((sum, item) => sum + Number(item.amount) * monthlyFactor[item.frequency], 0); }
+    function monthlyExpenses() { return state.expenses.filter(x => monthKey(x.date) === currentMonth).reduce((sum, x) => sum + Number(x.amount), 0); }
+    function spentByMacro(macro) {
+      const variable = state.expenses.filter(x => monthKey(x.date) === currentMonth && x.macro === macro).reduce((s, x) => s + Number(x.amount), 0);
+      const fixed = state.fixed.filter(x => x.macro === macro).reduce((s, x) => s + Number(x.amount) * monthlyFactor[x.frequency], 0);
+      return variable + fixed;
+    }
+    function investedThisMonth() {
+      return state.expenses.filter(x => monthKey(x.date) === currentMonth && x.macro === 'Risparmio/Investimento').reduce((s, x) => s + Number(x.amount), 0);
+    }
+    function render() {
+      const cash = state.accounts.reduce((s, x) => s + Number(x.balance), 0);
+      const investments = state.investments.reduce((s, x) => s + Number(x.value), 0);
+      const expenses = monthlyExpenses();
+      document.getElementById('netWorth').textContent = euro(cash + investments - expenses);
+      document.getElementById('dashCash').textContent = euro(cash);
+      document.getElementById('dashInvestments').textContent = euro(investments);
+      document.getElementById('dashExpenses').textContent = euro(expenses);
+      document.getElementById('dashIncome').textContent = euro(state.income);
+      document.getElementById('dashFixed').textContent = euro(monthlyFixed());
+      document.getElementById('dashMargin').textContent = euro(state.income - monthlyFixed() - expenses);
+      document.getElementById('monthLabel').textContent = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' }).format(today);
+      document.getElementById('incomeInput').value = state.income || '';
+      renderChart(cash, investments, expenses); renderBudget(); renderExpenses(); renderFixed(); renderAccounts(); renderInvestments();
+    }
+    function renderChart(cash, investments, expenses) {
+      if (wealthChart) wealthChart.destroy();
+      wealthChart = new Chart(document.getElementById('wealthChart'), { type: 'doughnut', data: { labels: ['LiquiditÃ ', 'Investimenti', 'Spese mese'], datasets: [{ data: [cash, investments, expenses], backgroundColor: ['#34d399', '#8b5cf6', '#fb7185'], borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '72%', plugins: { legend: { position: 'bottom', labels: { color: '#cbd5e1', usePointStyle: true, padding: 16 } } } } });
+    }
+    function barColor(ratio) { return ratio > 1 ? '#fb7185' : ratio >= .8 ? '#facc15' : '#34d399'; }
+    function renderBudget() {
+      const targets = [['NecessitÃ ', state.income * state.budget.needs / 100, spentByMacro('NecessitÃ '), 'Spese fisse + variabili'], ['Desideri', state.income * state.budget.wants / 100, spentByMacro('Desideri'), 'Svago e stile di vita'], ['Risparmio/Investimento', state.income * state.budget.savings / 100, Math.max(investedThisMonth(), 0), 'Investito o risparmiato']];
+      document.getElementById('budgetBars').innerHTML = targets.map(([name, target, used, hint]) => {
+        const ratio = target ? used / target : 0, percent = Math.min(ratio * 100, 100);
+        return `<div><div class="mb-1 flex items-center justify-between gap-2 text-sm"><span class="font-semibold">${name}</span><span class="text-right text-xs text-slate-400">${euro(used)} / ${euro(target)} <b style="color:${barColor(ratio)}">${Math.round(ratio * 100)}%</b></span></div><div class="progress"><span style="width:${percent}%;background:${barColor(ratio)}"></span></div><p class="mt-1 text-xs text-slate-500">${hint}${name === 'NecessitÃ ' ? ` Â· Residuo: ${euro(Math.max(target - used, 0))}` : ''}</p></div>`;
+      }).join('');
+    }
+    function renderExpenses() {
+      const items = [...state.expenses].sort((a, b) => b.date.localeCompare(a.date));
+      document.getElementById('expenseTotal').textContent = `${items.length} movimenti Â· ${euro(monthlyExpenses())} questo mese`;
+      document.getElementById('expenseList').innerHTML = items.length ? items.map(x => `<div class="flex items-center justify-between gap-3 rounded-xl bg-slate-900/70 p-3"><div class="min-w-0"><p class="truncate font-semibold">${esc(x.category)} <span class="ml-1 rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-normal text-slate-400">${esc(x.macro)}</span></p><p class="text-xs text-slate-500">${x.date}${x.note ? ` Â· ${esc(x.note)}` : ''}</p></div><div class="flex items-center gap-2"><b class="whitespace-nowrap text-rose-300">âˆ’ ${euro(x.amount)}</b><button class="btn btn-danger px-3 text-xs" data-delete="expense" data-id="${x.id}">Elimina</button></div></div>`).join('') : empty('Nessuna spesa registrata.');
+    }
+    function renderFixed() {
+      const m = monthlyFixed(); document.getElementById('fixedMonthly').textContent = euro(m); document.getElementById('fixedAnnual').textContent = euro(m * 12);
+      document.getElementById('fixedList').innerHTML = state.fixed.length ? state.fixed.map(x => `<div class="glass rounded-2xl p-4"><div class="flex items-start justify-between gap-3"><div><h3 class="font-bold">${esc(x.name)}</h3><p class="mt-1 text-xs text-slate-400">${esc(x.category)} Â· ${esc(x.macro)} Â· giorno ${x.day}</p></div><button class="btn btn-danger px-3 text-xs" data-delete="fixed" data-id="${x.id}">Elimina</button></div><div class="mt-3 flex flex-wrap items-center justify-between gap-2"><span class="text-sm">${euro(x.amount)} Â· ${frequencyLabel[x.frequency]} <b class="text-violet-300">(${euro(x.amount * monthlyFactor[x.frequency])}/mese)</b></span><button class="btn btn-quiet text-xs" data-pay="${x.id}">âœ“ Segna pagata questo mese</button></div></div>`).join('') : empty('Nessuna spesa fissa attiva.');
+    }
+    function renderAccounts() { document.getElementById('accountList').innerHTML = state.accounts.length ? state.accounts.map(x => `<div class="glass flex items-center justify-between rounded-2xl p-4"><div><p class="font-semibold">${esc(x.name)}</p><p class="text-xs text-slate-500">LiquiditÃ  disponibile</p></div><div class="flex items-center gap-2"><b class="text-emerald-300">${euro(x.balance)}</b><button class="btn btn-quiet px-3 text-xs text-amber-200" data-edit-account="${x.id}">Modifica</button><button class="btn btn-danger px-3 text-xs" data-delete="account" data-id="${x.id}">Ã—</button></div></div>`).join('') : empty('Aggiungi il tuo primo conto.'); }
+    function renderInvestments() { document.getElementById('investmentList').innerHTML = state.investments.length ? state.investments.map(x => { const cost = Number(x.quantity) * Number(x.cost), pnl = Number(x.value) - cost, pct = cost ? pnl / cost * 100 : 0; return `<div class="glass rounded-2xl p-4"><div class="flex items-start justify-between"><div><h3 class="font-bold">${esc(x.name)}</h3><p class="text-xs text-slate-500">${x.quantity} unitÃ  Â· PMC ${euro(x.cost)}</p></div><button class="btn btn-danger px-3 text-xs" data-delete="investment" data-id="${x.id}">Elimina</button></div><div class="mt-3 grid grid-cols-2 gap-2 text-sm"><div><span class="block text-xs text-slate-500">Valore attuale</span><b>${euro(x.value)}</b></div><div><span class="block text-xs text-slate-500">Profit / Loss</span><b class="${pnl >= 0 ? 'text-emerald-300' : 'text-rose-300'}">${pnl >= 0 ? '+' : ''}${euro(pnl)} (${pnl >= 0 ? '+' : ''}${pct.toFixed(2)}%)</b></div></div></div>`; }).join('') : empty('Nessun asset in portafoglio.'); }
+    function empty(text) { return `<p class="rounded-xl border border-dashed border-slate-700 p-5 text-center text-sm text-slate-500">${text}</p>`; }
+    function esc(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+    function formData(form) { return Object.fromEntries(new FormData(form).entries()); }
+    function addExpense(data) { state.expenses.push({ ...data, id: id(), amount: Number(data.amount) }); save(); }
+    document.querySelectorAll('.nav-item').forEach(btn => btn.addEventListener('click', () => { document.querySelectorAll('.section').forEach(s => s.classList.toggle('active', s.id === btn.dataset.section)); document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n === btn)); window.scrollTo({ top: 0, behavior: 'smooth' }); }));
+    document.querySelector('#expenseForm [name=date]').value = today.toISOString().slice(0, 10);
+    document.getElementById('expenseForm').addEventListener('submit', e => { e.preventDefault(); addExpense(formData(e.target)); e.target.reset(); e.target.querySelector('[name=date]').value = today.toISOString().slice(0, 10); toast('Spesa aggiunta'); });
+    document.getElementById('fixedForm').addEventListener('submit', e => { e.preventDefault(); state.fixed.push({ ...formData(e.target), id: id(), amount: Number(formData(e.target).amount), day: Number(formData(e.target).day) }); save(); e.target.reset(); toast('Spesa fissa aggiunta'); });
+    document.getElementById('accountForm').addEventListener('submit', e => { e.preventDefault(); const d = formData(e.target); state.accounts.push({ ...d, id: id(), balance: Number(d.balance) }); save(); e.target.reset(); toast('Conto aggiunto'); });
+    document.getElementById('investmentForm').addEventListener('submit', e => { e.preventDefault(); const d = formData(e.target); state.investments.push({ ...d, id: id(), quantity: Number(d.quantity), cost: Number(d.cost), value: Number(d.value) }); save(); e.target.reset(); toast('Asset aggiunto'); });
+    document.getElementById('settingsForm').addEventListener('submit', e => { e.preventDefault(); state.income = Number(document.getElementById('incomeInput').value) || 0; save(); toast('Entrata mensile salvata'); });
+    const budgetModal = document.getElementById('budgetModal');
+    document.getElementById('budgetSettingsBtn').addEventListener('click', () => { document.getElementById('needsPercent').value = state.budget.needs; document.getElementById('wantsPercent').value = state.budget.wants; document.getElementById('savingsPercent').value = state.budget.savings; budgetModal.classList.remove('hidden'); budgetModal.classList.add('flex'); });
+    document.getElementById('closeBudgetModal').addEventListener('click', () => { budgetModal.classList.add('hidden'); budgetModal.classList.remove('flex'); });
+    document.getElementById('budgetForm').addEventListener('submit', e => { e.preventDefault(); const budget = { needs: Number(document.getElementById('needsPercent').value), wants: Number(document.getElementById('wantsPercent').value), savings: Number(document.getElementById('savingsPercent').value) }; if (budget.needs < 0 || budget.wants < 0 || budget.savings < 0 || budget.needs + budget.wants + budget.savings !== 100) { toast('Le percentuali devono sommare a 100%', true); return; } state.budget = budget; save(); budgetModal.classList.add('hidden'); budgetModal.classList.remove('flex'); toast('Regola budget aggiornata'); });
+    document.addEventListener('click', e => {
+      const edit = e.target.closest('[data-edit-account]'); if (edit) { const account = state.accounts.find(x => x.id === edit.dataset.editAccount); if (!account) return; const next = prompt(`Nuova liquiditÃ  per ${account.name}`, account.balance); if (next !== null && Number.isFinite(Number(next)) && Number(next) >= 0) { account.balance = Number(next); save(); toast('LiquiditÃ  aggiornata'); } }
+      const del = e.target.closest('[data-delete]'); if (del) { const { delete: type, id: itemId } = del.dataset; const key = { expense: 'expenses', fixed: 'fixed', account: 'accounts', investment: 'investments' }[type]; state[key] = state[key].filter(x => x.id !== itemId); save(); toast('Elemento eliminato'); }
+      const pay = e.target.closest('[data-pay]'); if (pay) { const item = state.fixed.find(x => x.id === pay.dataset.pay); if (item) { addExpense({ amount: item.amount, category: item.category, macro: item.macro, date: today.toISOString().slice(0, 10), note: `${item.name} Â· ricorrente` }); toast('Pagamento registrato nelle spese'); } }
+    });
+    function downloadBackup() { const json = JSON.stringify(state, null, 2); const bridge = nativeSecurity(); if (bridge && bridge.exportBackup) { bridge.exportBackup(json); return; } const blob = new Blob([json], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `finanza-backup-${currentMonth}.json`; a.click(); URL.revokeObjectURL(a.href); toast('Backup esportato'); }
+    document.getElementById('exportBtn').addEventListener('click', downloadBackup); document.getElementById('headerExport').addEventListener('click', downloadBackup);
+    function importBackupText(text) { try { const imported = JSON.parse(text); if (!imported || !Array.isArray(imported.expenses) || !Array.isArray(imported.fixed)) throw new Error(); state = { ...defaultState, ...imported }; save(); toast('Backup ripristinato'); } catch { toast('File JSON non valido', true); } }
+    window.nativeImportBackupFromAndroid = encoded => { try { importBackupText(atob(encoded)); } catch { toast('Impossibile leggere il backup', true); } };
+    window.addEventListener('nativeBackupExported', () => toast('Backup esportato'));
+    document.getElementById('importInput').addEventListener('click', e => { const bridge = nativeSecurity(); if (bridge && bridge.importBackup) { e.preventDefault(); bridge.importBackup(); } });
+    document.getElementById('importInput').addEventListener('change', e => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => importBackupText(reader.result); reader.readAsText(file); e.target.value = ''; });
+    document.getElementById('resetBtn').addEventListener('click', () => { if (confirm('Vuoi cancellare tutti i dati locali?')) { state = { ...defaultState }; save(); toast('Dati cancellati'); } });
+    document.getElementById('setPinBtn').addEventListener('click', () => showPinSetup());
+    document.getElementById('closePinSetup').addEventListener('click', closePinSetup);
+    document.getElementById('pinSetupForm').addEventListener('submit', async e => { e.preventDefault(); const pin = document.getElementById('newPin').value; const confirmPin = document.getElementById('confirmPin').value; const error = document.getElementById('pinSetupError'); if (!/^\d{4,}$/.test(pin) || pin !== confirmPin) { error.textContent = 'Inserisci due volte lo stesso PIN di almeno 4 cifre.'; error.classList.remove('hidden'); return; } try { localStorage.setItem(PIN_KEY, await hashPin(pin)); closePinSetup(); updatePinStatus(); if (pinSetupFromOnboarding) completeSecuritySetup(); pinSetupFromOnboarding = false; toast('Protezione PIN attivata'); } catch (err) { error.textContent = err.message; error.classList.remove('hidden'); } });
+    document.getElementById('removePinBtn').addEventListener('click', () => { if (!pinEnabled()) return; if (confirm('Disattivare la protezione PIN?')) { localStorage.removeItem(PIN_KEY); updatePinStatus(); toast('Protezione PIN disattivata'); } });
+    document.getElementById('biometricBtn').addEventListener('click', () => { const bridge = nativeSecurity(); if (!bridge) return; if (bridge.isEnabled()) { bridge.disable(); toast('Biometria Android disattivata'); } else { bridge.enable(); toast('Conferma la biometria nella finestra Android'); } updateNativeSecurity(); });
+    document.getElementById('firstRunPinBtn').addEventListener('click', () => { closeSecuritySetup(); showPinSetup(true); });
+    document.getElementById('skipSecurityBtn').addEventListener('click', () => { completeSecuritySetup(); toast('Protezione non attivata'); });
+    document.getElementById('firstRunBiometricBtn').addEventListener('click', () => { const bridge = nativeSecurity(); if (!bridge) return; bridge.enable(); toast('Conferma la biometria nella finestra Android'); });
+    window.addEventListener('nativeBiometricUnlocked', () => { if (!securityConfigured()) { completeSecuritySetup(); toast('Protezione biometrica attivata'); } updateNativeSecurity(); });
+    document.getElementById('pinUnlockForm').addEventListener('submit', async e => { e.preventDefault(); const input = document.getElementById('unlockPin'); try { if ((await hashPin(input.value)) === localStorage.getItem(PIN_KEY)) { document.getElementById('pinLock').classList.add('hidden'); document.getElementById('pinLock').classList.remove('flex'); input.value = ''; document.getElementById('pinError').classList.add('hidden'); } else { document.getElementById('pinError').classList.remove('hidden'); input.select(); } } catch { document.getElementById('pinError').textContent = 'Impossibile verificare il PIN in questo contesto.'; document.getElementById('pinError').classList.remove('hidden'); } });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && pinEnabled()) lockApp(); });
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    }
+    updatePinStatus();
+    updateNativeSecurity();
+    render();
+    if (!securityConfigured() && !(nativeSecurity() && nativeSecurity().isEnabled())) showSecuritySetup();
+    if (nativeSecurity() && nativeSecurity().isEnabled() && !securityConfigured()) completeSecuritySetup();
+    lockApp();
+  </script>
+</body>
+</html>
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#080d1a">
+  <meta name="description" content="Gestione personale di patrimonio, spese e budget 50/30/20">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/piggybaky.png?v=2" type="image/png">
+  <link rel="apple-touch-icon" href="./icons/piggybaky.png?v=2">
   <title>PiggyBanky · Budget personale</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
