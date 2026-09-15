@@ -1,13 +1,13 @@
 {
-  "name": "Finanza personale 50/30/20",
-  "short_name": "Finanza",
-  "description": "Gestione personale di patrimonio, spese e budget 50/30/20",
+  "name": "PiggyBanky",
+  "short_name": "PiggyBanky",
+  "description": "Gestione personale di patrimonio, spese e budget",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#080d1a",
-  "theme_color": "#080d1a",
+  "background_color": "#b91c1c",
+  "theme_color": "#b91c1c",
   "icons": [
     {
       "src": "./icons/icon.svg",

@@ -1,6 +1,6 @@
-# Finanza personale 50/30/20
+# PiggyBanky
 
-SPA mobile-first per patrimonio, spese, investimenti e budget 50/30/20.
+SPA mobile-first per patrimonio, spese, investimenti e budget personalizzabile.
 
 ## Installazione sullo smartphone
 
