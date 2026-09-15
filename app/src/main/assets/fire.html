@@ -7,7 +7,7 @@
   <meta name="description" content="Gestione personale di patrimonio, spese e budget 50/30/20">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
-  <title>Finanza personale · 50/30/20</title>
+  <title>PiggyBanky · Budget personale</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -46,7 +46,7 @@
   <header class="sticky top-0 z-30 border-b border-slate-800/80 bg-ink/90 px-4 pt-4 pb-3 backdrop-blur-xl">
     <div class="mx-auto flex max-w-5xl items-center justify-between">
       <div>
-        <p class="text-xs font-semibold uppercase tracking-[.2em] text-violet-300">Finanza personale</p>
+        <p class="text-xs font-semibold uppercase tracking-[.2em] text-amber-300">PiggyBanky</p>
         <h1 class="mt-1 text-xl font-bold tracking-tight">Il tuo patrimonio</h1>
       </div>
       <button id="headerExport" class="btn btn-quiet flex items-center gap-2 text-sm" title="Esporta backup">↗ <span class="hidden sm:inline">Backup</span></button>
@@ -92,7 +92,7 @@
       </div>
 
       <div class="glass rounded-2xl p-4">
-        <div class="mb-4 flex items-start justify-between"><div><h2 class="font-bold">Budget 50/30/20</h2><p class="mt-1 text-xs text-slate-500">Spese del mese in corso rispetto ai target teorici</p></div><span class="text-xs text-violet-300">Regola budget</span></div>
+        <div class="mb-4 flex items-start justify-between"><div><h2 class="font-bold">Budget personalizzato</h2><p class="mt-1 text-xs text-slate-500">Spese del mese in corso rispetto ai target teorici</p></div><button id="budgetSettingsBtn" class="btn btn-quiet px-3 text-xs text-amber-200">Regola budget</button></div>
         <div id="budgetBars" class="space-y-4"></div>
       </div>
     </section>
@@ -154,6 +154,17 @@
       <button class="nav-item rounded-xl px-1 py-2 text-[11px] text-slate-400" data-section="settings">⚙<span class="mt-0.5 block">Dati</span></button>
     </div>
   </nav>
+  <div id="budgetModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 p-4">
+    <form id="budgetForm" class="glass w-full max-w-sm rounded-2xl p-5">
+      <div class="flex items-start justify-between"><div><h2 class="text-lg font-bold">Regola budget</h2><p class="mt-1 text-xs text-slate-400">Le percentuali devono sommare a 100%.</p></div><button type="button" id="closeBudgetModal" class="btn btn-quiet px-3">×</button></div>
+      <div class="mt-4 grid grid-cols-3 gap-2">
+        <label class="text-xs text-slate-300">Necessità %<input id="needsPercent" class="input mt-1" type="number" min="0" max="100" step="1"></label>
+        <label class="text-xs text-slate-300">Desideri %<input id="wantsPercent" class="input mt-1" type="number" min="0" max="100" step="1"></label>
+        <label class="text-xs text-slate-300">Risparmi %<input id="savingsPercent" class="input mt-1" type="number" min="0" max="100" step="1"></label>
+      </div>
+      <button class="btn btn-primary mt-4 w-full" type="submit">Salva proporzioni</button>
+    </form>
+  </div>
   <div id="toastRoot" class="fixed bottom-24 left-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2"></div>
 
   <script>
@@ -163,8 +174,9 @@
     const id = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
     const monthKey = d => String(d || '').slice(0, 7);
     const currentMonth = today.toISOString().slice(0, 7);
-    const defaultState = { income: 0, accounts: [], investments: [], expenses: [], fixed: [] };
+    const defaultState = { income: 0, budget: { needs: 50, wants: 30, savings: 20 }, accounts: [], investments: [], expenses: [], fixed: [] };
     let state = loadState();
+    state.budget = { ...defaultState.budget, ...(state.budget || {}) };
     let wealthChart;
     const frequencyLabel = { monthly: 'Mensile', quarterly: 'Trimestrale', annual: 'Annuale' };
     const monthlyFactor = { monthly: 1, quarterly: 1 / 3, annual: 1 / 12 };
@@ -202,7 +214,7 @@
     }
     function barColor(ratio) { return ratio > 1 ? '#fb7185' : ratio >= .8 ? '#facc15' : '#34d399'; }
     function renderBudget() {
-      const targets = [['Necessità', state.income * .5, spentByMacro('Necessità'), 'Spese fisse + variabili'], ['Desideri', state.income * .3, spentByMacro('Desideri'), 'Svago e stile di vita'], ['Risparmio/Investimento', state.income * .2, Math.max(investedThisMonth(), 0), 'Investito o risparmiato']];
+      const targets = [['Necessità', state.income * state.budget.needs / 100, spentByMacro('Necessità'), 'Spese fisse + variabili'], ['Desideri', state.income * state.budget.wants / 100, spentByMacro('Desideri'), 'Svago e stile di vita'], ['Risparmio/Investimento', state.income * state.budget.savings / 100, Math.max(investedThisMonth(), 0), 'Investito o risparmiato']];
       document.getElementById('budgetBars').innerHTML = targets.map(([name, target, used, hint]) => {
         const ratio = target ? used / target : 0, percent = Math.min(ratio * 100, 100);
         return `<div><div class="mb-1 flex items-center justify-between gap-2 text-sm"><span class="font-semibold">${name}</span><span class="text-right text-xs text-slate-400">${euro(used)} / ${euro(target)} <b style="color:${barColor(ratio)}">${Math.round(ratio * 100)}%</b></span></div><div class="progress"><span style="width:${percent}%;background:${barColor(ratio)}"></span></div><p class="mt-1 text-xs text-slate-500">${hint}${name === 'Necessità' ? ` · Residuo: ${euro(Math.max(target - used, 0))}` : ''}</p></div>`;
@@ -217,7 +229,7 @@
       const m = monthlyFixed(); document.getElementById('fixedMonthly').textContent = euro(m); document.getElementById('fixedAnnual').textContent = euro(m * 12);
       document.getElementById('fixedList').innerHTML = state.fixed.length ? state.fixed.map(x => `<div class="glass rounded-2xl p-4"><div class="flex items-start justify-between gap-3"><div><h3 class="font-bold">${esc(x.name)}</h3><p class="mt-1 text-xs text-slate-400">${esc(x.category)} · ${esc(x.macro)} · giorno ${x.day}</p></div><button class="btn btn-danger px-3 text-xs" data-delete="fixed" data-id="${x.id}">Elimina</button></div><div class="mt-3 flex flex-wrap items-center justify-between gap-2"><span class="text-sm">${euro(x.amount)} · ${frequencyLabel[x.frequency]} <b class="text-violet-300">(${euro(x.amount * monthlyFactor[x.frequency])}/mese)</b></span><button class="btn btn-quiet text-xs" data-pay="${x.id}">✓ Segna pagata questo mese</button></div></div>`).join('') : empty('Nessuna spesa fissa attiva.');
     }
-    function renderAccounts() { document.getElementById('accountList').innerHTML = state.accounts.length ? state.accounts.map(x => `<div class="glass flex items-center justify-between rounded-2xl p-4"><div><p class="font-semibold">${esc(x.name)}</p><p class="text-xs text-slate-500">Liquidità disponibile</p></div><div class="flex items-center gap-2"><b class="text-emerald-300">${euro(x.balance)}</b><button class="btn btn-danger px-3 text-xs" data-delete="account" data-id="${x.id}">×</button></div></div>`).join('') : empty('Aggiungi il tuo primo conto.'); }
+    function renderAccounts() { document.getElementById('accountList').innerHTML = state.accounts.length ? state.accounts.map(x => `<div class="glass flex items-center justify-between rounded-2xl p-4"><div><p class="font-semibold">${esc(x.name)}</p><p class="text-xs text-slate-500">Liquidità disponibile</p></div><div class="flex items-center gap-2"><b class="text-emerald-300">${euro(x.balance)}</b><button class="btn btn-quiet px-3 text-xs text-amber-200" data-edit-account="${x.id}">Modifica</button><button class="btn btn-danger px-3 text-xs" data-delete="account" data-id="${x.id}">×</button></div></div>`).join('') : empty('Aggiungi il tuo primo conto.'); }
     function renderInvestments() { document.getElementById('investmentList').innerHTML = state.investments.length ? state.investments.map(x => { const cost = Number(x.quantity) * Number(x.cost), pnl = Number(x.value) - cost, pct = cost ? pnl / cost * 100 : 0; return `<div class="glass rounded-2xl p-4"><div class="flex items-start justify-between"><div><h3 class="font-bold">${esc(x.name)}</h3><p class="text-xs text-slate-500">${x.quantity} unità · PMC ${euro(x.cost)}</p></div><button class="btn btn-danger px-3 text-xs" data-delete="investment" data-id="${x.id}">Elimina</button></div><div class="mt-3 grid grid-cols-2 gap-2 text-sm"><div><span class="block text-xs text-slate-500">Valore attuale</span><b>${euro(x.value)}</b></div><div><span class="block text-xs text-slate-500">Profit / Loss</span><b class="${pnl >= 0 ? 'text-emerald-300' : 'text-rose-300'}">${pnl >= 0 ? '+' : ''}${euro(pnl)} (${pnl >= 0 ? '+' : ''}${pct.toFixed(2)}%)</b></div></div></div>`; }).join('') : empty('Nessun asset in portafoglio.'); }
     function empty(text) { return `<p class="rounded-xl border border-dashed border-slate-700 p-5 text-center text-sm text-slate-500">${text}</p>`; }
     function esc(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -230,7 +242,12 @@
     document.getElementById('accountForm').addEventListener('submit', e => { e.preventDefault(); const d = formData(e.target); state.accounts.push({ ...d, id: id(), balance: Number(d.balance) }); save(); e.target.reset(); toast('Conto aggiunto'); });
     document.getElementById('investmentForm').addEventListener('submit', e => { e.preventDefault(); const d = formData(e.target); state.investments.push({ ...d, id: id(), quantity: Number(d.quantity), cost: Number(d.cost), value: Number(d.value) }); save(); e.target.reset(); toast('Asset aggiunto'); });
     document.getElementById('settingsForm').addEventListener('submit', e => { e.preventDefault(); state.income = Number(document.getElementById('incomeInput').value) || 0; save(); toast('Entrata mensile salvata'); });
+    const budgetModal = document.getElementById('budgetModal');
+    document.getElementById('budgetSettingsBtn').addEventListener('click', () => { document.getElementById('needsPercent').value = state.budget.needs; document.getElementById('wantsPercent').value = state.budget.wants; document.getElementById('savingsPercent').value = state.budget.savings; budgetModal.classList.remove('hidden'); budgetModal.classList.add('flex'); });
+    document.getElementById('closeBudgetModal').addEventListener('click', () => { budgetModal.classList.add('hidden'); budgetModal.classList.remove('flex'); });
+    document.getElementById('budgetForm').addEventListener('submit', e => { e.preventDefault(); const budget = { needs: Number(document.getElementById('needsPercent').value), wants: Number(document.getElementById('wantsPercent').value), savings: Number(document.getElementById('savingsPercent').value) }; if (budget.needs < 0 || budget.wants < 0 || budget.savings < 0 || budget.needs + budget.wants + budget.savings !== 100) { toast('Le percentuali devono sommare a 100%', true); return; } state.budget = budget; save(); budgetModal.classList.add('hidden'); budgetModal.classList.remove('flex'); toast('Regola budget aggiornata'); });
     document.addEventListener('click', e => {
+      const edit = e.target.closest('[data-edit-account]'); if (edit) { const account = state.accounts.find(x => x.id === edit.dataset.editAccount); if (!account) return; const next = prompt(`Nuova liquidità per ${account.name}`, account.balance); if (next !== null && Number.isFinite(Number(next)) && Number(next) >= 0) { account.balance = Number(next); save(); toast('Liquidità aggiornata'); } }
       const del = e.target.closest('[data-delete]'); if (del) { const { delete: type, id: itemId } = del.dataset; const key = { expense: 'expenses', fixed: 'fixed', account: 'accounts', investment: 'investments' }[type]; state[key] = state[key].filter(x => x.id !== itemId); save(); toast('Elemento eliminato'); }
       const pay = e.target.closest('[data-pay]'); if (pay) { const item = state.fixed.find(x => x.id === pay.dataset.pay); if (item) { addExpense({ amount: item.amount, category: item.category, macro: item.macro, date: today.toISOString().slice(0, 10), note: `${item.name} · ricorrente` }); toast('Pagamento registrato nelle spese'); } }
     });
