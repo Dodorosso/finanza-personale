@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.FireApp" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#f5c542</item>
+        <item name="android:statusBarColor">#b91c1c</item>
+        <item name="android:navigationBarColor">#080d1a</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
