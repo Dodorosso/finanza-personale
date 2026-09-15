@@ -83,12 +83,12 @@
           <div class="mx-auto h-56 max-w-xs"><canvas id="wealthChart"></canvas></div>
         </div>
         <div class="glass rounded-2xl p-4">
-          <div class="flex items-center justify-between"><h2 class="font-bold">Riepilogo mese</h2><span id="monthLabel" class="text-xs text-slate-500"></span></div>
+          <div class="flex items-center justify-between"><h2 class="font-bold">Riepilogo mese</h2><button id="monthLabel" type="button" class="appearance-none bg-transparent p-0 text-xs font-semibold text-violet-300 underline decoration-dotted underline-offset-2"></button></div>
           <div class="mt-4 space-y-3">
             <div class="flex items-center justify-between"><span class="text-slate-400">Spese fisse</span><b id="dashFixed">€ 0</b></div>
             <div class="flex items-center justify-between"><span class="text-slate-400">Margine residuo</span><b id="dashMargin" class="text-emerald-300">€ 0</b></div>
             <div class="h-px bg-slate-800"></div>
-            <p class="text-xs text-slate-500">Il margine considera entrate meno spese variabili e fisse del mese.</p>
+            <p class="text-xs text-slate-500">Tocca il mese per vedere entrate e uscite nel dettaglio.</p>
           </div>
         </div>
       </div>
@@ -96,6 +96,12 @@
       <div class="glass rounded-2xl p-4">
         <div class="mb-4 flex items-start justify-between"><div><h2 class="font-bold">Budget personalizzato</h2><p class="mt-1 text-xs text-slate-500">Spese del mese in corso rispetto ai target teorici</p></div><button id="budgetSettingsBtn" class="btn btn-quiet px-3 text-xs text-amber-200">Regola budget</button></div>
         <div id="budgetBars" class="space-y-4"></div>
+      </div>
+
+      <div class="glass rounded-2xl p-4">
+        <div class="mb-3 flex items-center justify-between"><h2 class="font-bold">Andamento del capitale</h2><span class="text-xs text-slate-500">Ultimi mesi</span></div>
+        <div class="h-56"><canvas id="historyChart"></canvas></div>
+        <p class="mt-3 text-xs text-slate-500">Ogni apertura dell'app salva uno scatto del patrimonio del mese corrente: torna nei mesi successivi per vedere il trend crescere.</p>
       </div>
     </section>
 
@@ -168,6 +174,25 @@
       <button class="btn btn-primary mt-4 w-full" type="submit">Salva proporzioni</button>
     </form>
   </div>
+  <div id="monthModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 p-4">
+    <div class="glass w-full max-w-sm rounded-2xl p-5">
+      <div class="flex items-start justify-between">
+        <div><p class="text-xs font-semibold uppercase tracking-[.2em] text-violet-300">Dettaglio mese</p><h2 id="monthModalTitle" class="mt-1 text-lg font-bold"></h2></div>
+        <button type="button" id="closeMonthModal" class="btn btn-quiet px-3">×</button>
+      </div>
+      <div class="mt-4 flex items-center justify-between gap-2">
+        <button id="monthPrev" type="button" class="btn btn-quiet px-3 text-sm">‹ Prec</button>
+        <span class="text-xs text-slate-500">Entrate vs uscite</span>
+        <button id="monthNext" type="button" class="btn btn-quiet px-3 text-sm">Succ ›</button>
+      </div>
+      <div class="mt-4 h-52"><canvas id="monthChart"></canvas></div>
+      <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
+        <div class="rounded-xl bg-slate-900/70 p-3"><span class="block text-xs text-slate-500">Entrate</span><b id="monthIncomeVal" class="text-emerald-300"></b></div>
+        <div class="rounded-xl bg-slate-900/70 p-3"><span class="block text-xs text-slate-500">Uscite (fisse + variabili)</span><b id="monthExpenseVal" class="text-rose-300"></b></div>
+      </div>
+      <p id="monthNoData" class="mt-3 hidden text-xs text-amber-200">Nessuna spesa variabile registrata in questo mese.</p>
+    </div>
+  </div>
   <div id="pinLock" class="fixed inset-0 z-[60] hidden items-center justify-center p-5">
     <form id="pinUnlockForm" class="glass w-full max-w-sm rounded-2xl p-5">
       <p class="text-xs font-semibold uppercase tracking-[.2em] text-amber-300">PiggyBanky</p>
@@ -211,10 +236,12 @@
     const id = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
     const monthKey = d => String(d || '').slice(0, 7);
     const currentMonth = today.toISOString().slice(0, 7);
-    const defaultState = { income: 0, budget: { needs: 50, wants: 30, savings: 20 }, accounts: [], investments: [], expenses: [], fixed: [] };
+    const defaultState = { income: 0, budget: { needs: 50, wants: 30, savings: 20 }, accounts: [], investments: [], expenses: [], fixed: [], history: {} };
     let state = loadState();
     state.budget = { ...defaultState.budget, ...(state.budget || {}) };
-    let wealthChart;
+    state.history = state.history || {};
+    let wealthChart, historyChart, monthChart;
+    let modalMonth = currentMonth;
     let pinSetupFromOnboarding = false;
     const frequencyLabel = { monthly: 'Mensile', quarterly: 'Trimestrale', annual: 'Annuale' };
     const monthlyFactor = { monthly: 1, quarterly: 1 / 3, annual: 1 / 12 };
@@ -243,6 +270,39 @@
     function investedThisMonth() {
       return state.expenses.filter(x => monthKey(x.date) === currentMonth && x.macro === 'Risparmio/Investimento').reduce((s, x) => s + Number(x.amount), 0);
     }
+    function shiftMonth(base, delta) { const [y, m] = base.split('-').map(Number); const d = new Date(y, m - 1 + delta, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }
+    function monthLabelText(monthStr) { const label = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' }).format(new Date(`${monthStr}-01T00:00:00`)); return label.charAt(0).toUpperCase() + label.slice(1); }
+    function monthTotals(monthStr) {
+      const variable = state.expenses.filter(x => monthKey(x.date) === monthStr).reduce((s, x) => s + Number(x.amount), 0);
+      return { income: Number(state.income) || 0, variable, fixed: monthlyFixed(), expenses: variable + monthlyFixed() };
+    }
+    function updateHistorySnapshot(cash, investments, expenses) {
+      state.history[currentMonth] = { cash, investments, expenses, income: Number(state.income) || 0, netWorth: cash + investments - expenses, updatedAt: Date.now() };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+    function renderHistoryChart() {
+      const entries = Object.entries(state.history || {}).sort((a, b) => a[0].localeCompare(b[0])).slice(-12);
+      const labels = entries.map(([m]) => new Intl.DateTimeFormat('it-IT', { month: 'short', year: '2-digit' }).format(new Date(`${m}-01T00:00:00`)));
+      const data = entries.map(([, v]) => v.netWorth);
+      if (historyChart) historyChart.destroy();
+      historyChart = new Chart(document.getElementById('historyChart'), { type: 'line', data: { labels, datasets: [{ label: 'Patrimonio netto', data, borderColor: '#8b5cf6', backgroundColor: 'rgba(139,92,246,.18)', fill: true, tension: .35, pointRadius: 3, pointBackgroundColor: '#c4b5fd' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => euro(ctx.parsed.y) } } }, scales: { x: { ticks: { color: '#94a3b8' }, grid: { display: false } }, y: { ticks: { color: '#94a3b8', callback: v => euro(v) }, grid: { color: 'rgba(148,163,184,.12)' } } } } });
+    }
+    function renderMonthModal() {
+      document.getElementById('monthModalTitle').textContent = monthLabelText(modalMonth);
+      const totals = monthTotals(modalMonth);
+      document.getElementById('monthIncomeVal').textContent = euro(totals.income);
+      document.getElementById('monthExpenseVal').textContent = euro(totals.expenses);
+      document.getElementById('monthNoData').classList.toggle('hidden', totals.variable > 0);
+      if (monthChart) monthChart.destroy();
+      monthChart = new Chart(document.getElementById('monthChart'), { type: 'bar', data: { labels: ['Entrate', 'Spese fisse', 'Spese variabili'], datasets: [{ data: [totals.income, totals.fixed, totals.variable], backgroundColor: ['#34d399', '#f59e0b', '#fb7185'], borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => euro(ctx.parsed.y) } } }, scales: { x: { ticks: { color: '#cbd5e1' }, grid: { display: false } }, y: { ticks: { color: '#94a3b8', callback: v => euro(v) }, grid: { color: 'rgba(148,163,184,.12)' } } } } });
+    }
+    function openMonthModal(monthStr) {
+      modalMonth = monthStr || currentMonth;
+      renderMonthModal();
+      document.getElementById('monthModal').classList.remove('hidden');
+      document.getElementById('monthModal').classList.add('flex');
+    }
+    function closeMonthModal() { document.getElementById('monthModal').classList.add('hidden'); document.getElementById('monthModal').classList.remove('flex'); }
     function render() {
       const cash = state.accounts.reduce((s, x) => s + Number(x.balance), 0);
       const investments = state.investments.reduce((s, x) => s + Number(x.value), 0);
@@ -254,9 +314,11 @@
       document.getElementById('dashIncome').textContent = euro(state.income);
       document.getElementById('dashFixed').textContent = euro(monthlyFixed());
       document.getElementById('dashMargin').textContent = euro(state.income - monthlyFixed() - expenses);
-      document.getElementById('monthLabel').textContent = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' }).format(today);
+      document.getElementById('monthLabel').textContent = monthLabelText(currentMonth);
       document.getElementById('incomeInput').value = state.income || '';
-      renderChart(cash, investments, expenses); renderBudget(); renderExpenses(); renderFixed(); renderAccounts(); renderInvestments();
+      updateHistorySnapshot(cash, investments, expenses);
+      renderChart(cash, investments, expenses); renderBudget(); renderExpenses(); renderFixed(); renderAccounts(); renderInvestments(); renderHistoryChart();
+      if (!document.getElementById('monthModal').classList.contains('hidden')) renderMonthModal();
     }
     function renderChart(cash, investments, expenses) {
       if (wealthChart) wealthChart.destroy();
@@ -326,6 +388,11 @@
     const budgetModal = document.getElementById('budgetModal');
     document.getElementById('budgetSettingsBtn').addEventListener('click', () => { document.getElementById('needsPercent').value = state.budget.needs; document.getElementById('wantsPercent').value = state.budget.wants; document.getElementById('savingsPercent').value = state.budget.savings; budgetModal.classList.remove('hidden'); budgetModal.classList.add('flex'); });
     document.getElementById('closeBudgetModal').addEventListener('click', () => { budgetModal.classList.add('hidden'); budgetModal.classList.remove('flex'); });
+    document.getElementById('monthLabel').addEventListener('click', () => openMonthModal(currentMonth));
+    document.getElementById('closeMonthModal').addEventListener('click', closeMonthModal);
+    document.getElementById('monthModal').addEventListener('click', e => { if (e.target.id === 'monthModal') closeMonthModal(); });
+    document.getElementById('monthPrev').addEventListener('click', () => { modalMonth = shiftMonth(modalMonth, -1); renderMonthModal(); });
+    document.getElementById('monthNext').addEventListener('click', () => { modalMonth = shiftMonth(modalMonth, 1); renderMonthModal(); });
     document.getElementById('budgetForm').addEventListener('submit', e => { e.preventDefault(); const budget = { needs: Number(document.getElementById('needsPercent').value), wants: Number(document.getElementById('wantsPercent').value), savings: Number(document.getElementById('savingsPercent').value) }; if (budget.needs < 0 || budget.wants < 0 || budget.savings < 0 || budget.needs + budget.wants + budget.savings !== 100) { toast('Le percentuali devono sommare a 100%', true); return; } state.budget = budget; save(); budgetModal.classList.add('hidden'); budgetModal.classList.remove('flex'); toast('Regola budget aggiornata'); });
     document.addEventListener('click', e => {
       const edit = e.target.closest('[data-edit]'); if (edit) { startEdit(edit.dataset.edit, edit.dataset.id); return; }
