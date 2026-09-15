@@ -15,13 +15,13 @@ jobs:
           distribution: temurin
           java-version: "17"
       - uses: android-actions/setup-android@v3
+        with:
+          accept-android-sdk-licenses: true
       - uses: gradle/actions/setup-gradle@v4
-      - name: Accept Android SDK licenses
-        run: yes | sdkmanager --licenses >/dev/null || true
       - name: Sync web app
         run: cp index.html app/src/main/assets/fire.html
       - name: Build debug APK
-        run: gradle assembleDebug
+        run: gradle --no-daemon assembleDebug
       - uses: actions/upload-artifact@v4
         with:
           name: finanza-personale-debug-apk
