@@ -6,7 +6,8 @@
   <meta name="theme-color" content="#080d1a">
   <meta name="description" content="Gestione personale di patrimonio, spese e budget 50/30/20">
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="./icons/piggybaky.png?v=2" type="image/png">
+  <link rel="apple-touch-icon" href="./icons/piggybaky.png?v=2">
   <title>PiggyBanky · Budget personale</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -40,6 +41,7 @@
     @keyframes toast-in { from { transform: translateY(12px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
     .section { display: none; }
     .section.active { display: block; }
+    #pinLock { background: rgba(8,13,26,.96); }
   </style>
 </head>
 <body class="min-h-screen">
@@ -81,12 +83,12 @@
           <div class="mx-auto h-56 max-w-xs"><canvas id="wealthChart"></canvas></div>
         </div>
         <div class="glass rounded-2xl p-4">
-          <div class="flex items-center justify-between"><h2 class="font-bold">Riepilogo mese</h2><span id="monthLabel" class="text-xs text-slate-500"></span></div>
+          <div class="flex items-center justify-between"><h2 class="font-bold">Riepilogo mese</h2><button id="monthLabel" type="button" class="appearance-none bg-transparent p-0 text-xs font-semibold text-violet-300 underline decoration-dotted underline-offset-2"></button></div>
           <div class="mt-4 space-y-3">
             <div class="flex items-center justify-between"><span class="text-slate-400">Spese fisse</span><b id="dashFixed">€ 0</b></div>
             <div class="flex items-center justify-between"><span class="text-slate-400">Margine residuo</span><b id="dashMargin" class="text-emerald-300">€ 0</b></div>
             <div class="h-px bg-slate-800"></div>
-            <p class="text-xs text-slate-500">Il margine considera entrate meno spese variabili e fisse del mese.</p>
+            <p class="text-xs text-slate-500">Tocca il mese per vedere entrate e uscite nel dettaglio.</p>
           </div>
         </div>
       </div>
@@ -94,6 +96,12 @@
       <div class="glass rounded-2xl p-4">
         <div class="mb-4 flex items-start justify-between"><div><h2 class="font-bold">Budget personalizzato</h2><p class="mt-1 text-xs text-slate-500">Spese del mese in corso rispetto ai target teorici</p></div><button id="budgetSettingsBtn" class="btn btn-quiet px-3 text-xs text-amber-200">Regola budget</button></div>
         <div id="budgetBars" class="space-y-4"></div>
+      </div>
+
+      <div class="glass rounded-2xl p-4">
+        <div class="mb-3 flex items-center justify-between"><h2 class="font-bold">Andamento del capitale</h2><span class="text-xs text-slate-500">Ultimi mesi</span></div>
+        <div class="h-56"><canvas id="historyChart"></canvas></div>
+        <p class="mt-3 text-xs text-slate-500">Ogni apertura dell'app salva uno scatto del patrimonio del mese corrente: torna nei mesi successivi per vedere il trend crescere.</p>
       </div>
     </section>
 
@@ -105,7 +113,7 @@
         <label class="text-sm text-slate-300">Data<input class="input mt-1" name="date" type="date" required></label>
         <label class="text-sm text-slate-300">Macro-tipologia<select class="input mt-1" name="macro"><option>Necessità</option><option>Desideri</option><option>Risparmio/Investimento</option></select></label>
         <label class="text-sm text-slate-300 sm:col-span-2">Note<textarea class="input mt-1" name="note" rows="2" placeholder="Dettagli facoltativi"></textarea></label>
-        <button class="btn btn-primary sm:col-span-2" type="submit">+ Aggiungi spesa</button>
+        <button id="expenseSubmit" class="btn btn-primary sm:col-span-2" type="submit">+ Aggiungi spesa</button><button id="expenseCancelEdit" class="btn btn-quiet hidden sm:col-span-2" type="button">Annulla modifica</button>
       </form>
       <div class="glass rounded-2xl p-4"><div class="mb-3 flex items-center justify-between"><h2 class="font-bold">Ultime spese</h2><span id="expenseTotal" class="text-sm text-slate-400"></span></div><div id="expenseList" class="space-y-2"></div></div>
     </section>
@@ -119,7 +127,7 @@
         <label class="text-sm text-slate-300">Giorno addebito<input class="input mt-1" name="day" type="number" min="1" max="31" value="1" required></label>
         <label class="text-sm text-slate-300">Categoria<input class="input mt-1" name="category" required placeholder="Casa"></label>
         <label class="text-sm text-slate-300">Macro-tipologia<select class="input mt-1" name="macro"><option>Necessità</option><option>Desideri</option><option>Risparmio/Investimento</option></select></label>
-        <button class="btn btn-primary sm:col-span-2" type="submit">+ Aggiungi spesa fissa</button>
+        <button id="fixedSubmit" class="btn btn-primary sm:col-span-2" type="submit">+ Aggiungi spesa fissa</button><button id="fixedCancelEdit" class="btn btn-quiet hidden sm:col-span-2" type="button">Annulla modifica</button>
       </form>
       <div class="grid gap-3 sm:grid-cols-2"><div class="glass rounded-2xl p-4"><span class="text-sm text-slate-400">Uscite mensili equivalenti</span><b id="fixedMonthly" class="mt-1 block text-2xl">€ 0</b></div><div class="glass rounded-2xl p-4"><span class="text-sm text-slate-400">Uscite annualizzate</span><b id="fixedAnnual" class="mt-1 block text-2xl">€ 0</b></div></div>
       <div id="fixedList" class="space-y-3"></div>
@@ -127,19 +135,20 @@
 
     <section id="capital" class="section space-y-5">
       <div><p class="text-xs font-semibold uppercase tracking-[.2em] text-violet-300">Liquidità</p><h2 class="mt-1 text-2xl font-black">I tuoi conti</h2></div>
-      <form id="accountForm" class="glass grid gap-3 rounded-2xl p-4 sm:grid-cols-2"><label class="text-sm text-slate-300">Nome conto<input class="input mt-1" name="name" required placeholder="Conto principale"></label><label class="text-sm text-slate-300">Saldo (€)<input class="input mt-1" name="balance" type="number" step="0.01" required placeholder="2500"></label><button class="btn btn-primary sm:col-span-2" type="submit">+ Aggiungi conto</button></form>
+      <form id="accountForm" class="glass grid gap-3 rounded-2xl p-4 sm:grid-cols-2"><label class="text-sm text-slate-300">Nome conto<input class="input mt-1" name="name" required placeholder="Conto principale"></label><label class="text-sm text-slate-300">Saldo (€)<input class="input mt-1" name="balance" type="number" step="0.01" required placeholder="2500"></label><button id="accountSubmit" class="btn btn-primary sm:col-span-2" type="submit">+ Aggiungi conto</button><button id="accountCancelEdit" class="btn btn-quiet hidden sm:col-span-2" type="button">Annulla modifica</button></form>
       <div id="accountList" class="grid gap-3 sm:grid-cols-2"></div>
     </section>
 
     <section id="investments" class="section space-y-5">
       <div><p class="text-xs font-semibold uppercase tracking-[.2em] text-violet-300">Portafoglio</p><h2 class="mt-1 text-2xl font-black">Investimenti</h2></div>
-      <form id="investmentForm" class="glass grid gap-3 rounded-2xl p-4 sm:grid-cols-2"><label class="text-sm text-slate-300">Nome / Ticker<input class="input mt-1" name="name" required placeholder="VWCE"></label><label class="text-sm text-slate-300">Quantità<input class="input mt-1" name="quantity" type="number" min="0" step="any" required placeholder="10"></label><label class="text-sm text-slate-300">PMC (€)<input class="input mt-1" name="cost" type="number" min="0" step="0.01" required placeholder="100"></label><label class="text-sm text-slate-300">Valore attuale (€)<input class="input mt-1" name="value" type="number" min="0" step="0.01" required placeholder="115"></label><button class="btn btn-primary sm:col-span-2" type="submit">+ Aggiungi asset</button></form>
+      <form id="investmentForm" class="glass grid gap-3 rounded-2xl p-4 sm:grid-cols-2"><label class="text-sm text-slate-300">Nome / Ticker<input class="input mt-1" name="name" required placeholder="VWCE"></label><label class="text-sm text-slate-300">Quantità<input class="input mt-1" name="quantity" type="number" min="0" step="any" required placeholder="10"></label><label class="text-sm text-slate-300">PMC (€)<input class="input mt-1" name="cost" type="number" min="0" step="0.01" required placeholder="100"></label><label class="text-sm text-slate-300">Valore attuale (€)<input class="input mt-1" name="value" type="number" min="0" step="0.01" required placeholder="115"></label><button id="investmentSubmit" class="btn btn-primary sm:col-span-2" type="submit">+ Aggiungi asset</button><button id="investmentCancelEdit" class="btn btn-quiet hidden sm:col-span-2" type="button">Annulla modifica</button></form>
       <div id="investmentList" class="space-y-3"></div>
     </section>
 
     <section id="settings" class="section space-y-5">
       <div><p class="text-xs font-semibold uppercase tracking-[.2em] text-violet-300">Preferenze</p><h2 class="mt-1 text-2xl font-black">Impostazioni & dati</h2></div>
       <form id="settingsForm" class="glass rounded-2xl p-4"><label class="text-sm text-slate-300">Entrata mensile netta di riferimento (€)<input id="incomeInput" class="input mt-1" type="number" min="0" step="0.01" placeholder="2500"></label><button class="btn btn-primary mt-3 w-full" type="submit">Salva entrata</button></form>
+      <div class="glass rounded-2xl p-4"><div class="flex items-start justify-between gap-3"><div><h2 class="font-bold">Protezione app</h2><p id="pinStatus" class="mt-1 text-sm text-slate-400">Accesso protetto da PIN disattivato.</p></div><span class="rounded-full bg-amber-400/10 px-2 py-1 text-xs text-amber-200">Locale</span></div><div class="mt-4 grid gap-2 sm:grid-cols-3"><button id="setPinBtn" class="btn btn-quiet">Imposta PIN</button><button id="removePinBtn" class="btn btn-danger">Disattiva PIN</button><button id="biometricBtn" class="btn btn-quiet hidden">Attiva impronta</button></div><p id="biometricStatus" class="mt-3 hidden text-sm text-emerald-300">Biometria Android attiva.</p><p class="mt-3 text-xs text-slate-500">Il PIN non viene salvato: viene memorizzato solo un hash sul dispositivo. Nell'APK puoi usare anche impronta o PIN del dispositivo Android.</p></div>
       <div class="glass rounded-2xl p-4"><h2 class="font-bold">Backup locale</h2><p class="mt-1 text-sm text-slate-400">Esporta un file JSON oppure ripristina un backup esistente.</p><div class="mt-4 grid gap-2 sm:grid-cols-2"><button id="exportBtn" class="btn btn-quiet">↓ Esporta JSON</button><label class="btn btn-quiet cursor-pointer text-center">↑ Importa JSON<input id="importInput" type="file" accept=".json,application/json" class="hidden"></label></div><button id="resetBtn" class="btn btn-danger mt-3 w-full">Svuota tutti i dati</button></div>
     </section>
   </main>
@@ -165,23 +174,91 @@
       <button class="btn btn-primary mt-4 w-full" type="submit">Salva proporzioni</button>
     </form>
   </div>
+  <div id="monthModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/70 p-4">
+    <div class="glass w-full max-w-sm rounded-2xl p-5">
+      <div class="flex items-start justify-between">
+        <div><p class="text-xs font-semibold uppercase tracking-[.2em] text-violet-300">Dettaglio mese</p><h2 id="monthModalTitle" class="mt-1 text-lg font-bold"></h2></div>
+        <button type="button" id="closeMonthModal" class="btn btn-quiet px-3">×</button>
+      </div>
+      <div class="mt-4 flex items-center justify-between gap-2">
+        <button id="monthPrev" type="button" class="btn btn-quiet px-3 text-sm">‹ Prec</button>
+        <span class="text-xs text-slate-500">Entrate vs uscite</span>
+        <button id="monthNext" type="button" class="btn btn-quiet px-3 text-sm">Succ ›</button>
+      </div>
+      <div class="mt-4 h-52"><canvas id="monthChart"></canvas></div>
+      <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
+        <div class="rounded-xl bg-slate-900/70 p-3"><span class="block text-xs text-slate-500">Entrate</span><b id="monthIncomeVal" class="text-emerald-300"></b></div>
+        <div class="rounded-xl bg-slate-900/70 p-3"><span class="block text-xs text-slate-500">Uscite (fisse + variabili)</span><b id="monthExpenseVal" class="text-rose-300"></b></div>
+      </div>
+      <p id="monthNoData" class="mt-3 hidden text-xs text-amber-200">Nessuna spesa variabile registrata in questo mese.</p>
+    </div>
+  </div>
+  <div id="pinLock" class="fixed inset-0 z-[60] hidden items-center justify-center p-5">
+    <form id="pinUnlockForm" class="glass w-full max-w-sm rounded-2xl p-5">
+      <p class="text-xs font-semibold uppercase tracking-[.2em] text-amber-300">PiggyBanky</p>
+      <h2 class="mt-2 text-xl font-bold">App protetta</h2>
+      <p class="mt-1 text-sm text-slate-400">Inserisci il PIN per accedere ai tuoi dati.</p>
+      <input id="unlockPin" class="input mt-4" type="password" inputmode="numeric" autocomplete="current-password" minlength="4" required placeholder="PIN">
+      <p id="pinError" class="mt-2 hidden text-sm text-rose-300">PIN non corretto.</p>
+      <button class="btn btn-primary mt-4 w-full" type="submit">Sblocca</button>
+    </form>
+  </div>
+  <div id="pinSetup" class="fixed inset-0 z-[60] hidden items-center justify-center bg-black/70 p-5">
+    <form id="pinSetupForm" class="glass w-full max-w-sm rounded-2xl p-5">
+      <div class="flex items-start justify-between"><div><h2 class="text-lg font-bold">Imposta PIN</h2><p class="mt-1 text-xs text-slate-400">Scegli almeno 4 cifre per proteggere l'app.</p></div><button type="button" id="closePinSetup" class="btn btn-quiet px-3">×</button></div>
+      <input id="newPin" class="input mt-4" type="password" inputmode="numeric" autocomplete="new-password" minlength="4" required placeholder="Nuovo PIN">
+      <input id="confirmPin" class="input mt-2" type="password" inputmode="numeric" autocomplete="new-password" minlength="4" required placeholder="Conferma PIN">
+      <p id="pinSetupError" class="mt-2 hidden text-sm text-rose-300"></p>
+      <button class="btn btn-primary mt-4 w-full" type="submit">Attiva protezione</button>
+    </form>
+  </div>
+  <div id="securitySetup" class="fixed inset-0 z-[59] hidden items-center justify-center bg-black/70 p-5">
+    <div class="glass w-full max-w-sm rounded-2xl p-5">
+      <p class="text-xs font-semibold uppercase tracking-[.2em] text-amber-300">PiggyBanky</p>
+      <h2 class="mt-2 text-xl font-bold">Proteggi la tua app</h2>
+      <p class="mt-1 text-sm text-slate-400">Al primo avvio scegli come proteggere i tuoi dati. Potrai cambiare questa scelta in qualsiasi momento.</p>
+      <div id="securitySetupActions" class="mt-5 grid gap-2">
+        <button id="firstRunPinBtn" class="btn btn-primary w-full">Imposta un PIN</button>
+        <button id="firstRunBiometricBtn" class="btn btn-quiet hidden w-full">Attiva impronta / biometria</button>
+        <button id="skipSecurityBtn" class="btn btn-quiet w-full">Continua senza protezione</button>
+      </div>
+      <p id="securitySetupHint" class="mt-3 text-xs text-slate-500">La protezione è consigliata perché l’app contiene dati finanziari.</p>
+    </div>
+  </div>
   <div id="toastRoot" class="fixed bottom-24 left-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2"></div>
 
   <script>
     const STORAGE_KEY = 'finanza-personale-v1';
+    const PIN_KEY = 'piggybanky-pin-hash-v1';
+    const SECURITY_SETUP_KEY = 'piggybanky-security-setup-v1';
     const today = new Date();
     const euro = n => new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(Number(n) || 0);
     const id = () => crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
     const monthKey = d => String(d || '').slice(0, 7);
     const currentMonth = today.toISOString().slice(0, 7);
-    const defaultState = { income: 0, budget: { needs: 50, wants: 30, savings: 20 }, accounts: [], investments: [], expenses: [], fixed: [] };
+    const defaultState = { income: 0, budget: { needs: 50, wants: 30, savings: 20 }, accounts: [], investments: [], expenses: [], fixed: [], history: {} };
     let state = loadState();
     state.budget = { ...defaultState.budget, ...(state.budget || {}) };
-    let wealthChart;
+    state.history = state.history || {};
+    let wealthChart, historyChart, monthChart;
+    let modalMonth = currentMonth;
+    let pinSetupFromOnboarding = false;
     const frequencyLabel = { monthly: 'Mensile', quarterly: 'Trimestrale', annual: 'Annuale' };
     const monthlyFactor = { monthly: 1, quarterly: 1 / 3, annual: 1 / 12 };
     function loadState() { try { return { ...defaultState, ...JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}') }; } catch { return { ...defaultState }; } }
     function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); render(); }
+    async function hashPin(pin) { if (crypto.subtle) { const bytes = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pin)); return [...new Uint8Array(bytes)].map(x => x.toString(16).padStart(2, '0')).join(''); } let hash = 2166136261; for (let round = 0; round < 2048; round++) { for (const char of `${pin}:piggybanky:${round}`) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619); } return `fallback-${(hash >>> 0).toString(16)}`; }
+    function pinEnabled() { return Boolean(localStorage.getItem(PIN_KEY)); }
+    function securityConfigured() { return localStorage.getItem(SECURITY_SETUP_KEY) === 'configured'; }
+    function completeSecuritySetup() { localStorage.setItem(SECURITY_SETUP_KEY, 'configured'); closeSecuritySetup(); }
+    function nativeSecurity() { return window.PiggyBankySecurity; }
+    function updateNativeSecurity() { const bridge = nativeSecurity(); const button = document.getElementById('biometricBtn'); if (!bridge || !bridge.isAvailable()) return; button.classList.remove('hidden'); const enabled = bridge.isEnabled(); button.textContent = enabled ? 'Disattiva impronta' : 'Attiva impronta'; document.getElementById('biometricStatus').classList.toggle('hidden', !enabled); }
+    function updatePinStatus() { const enabled = pinEnabled(); document.getElementById('pinStatus').textContent = enabled ? 'Accesso protetto da PIN attivo su questo dispositivo.' : 'Accesso protetto da PIN disattivato.'; document.getElementById('removePinBtn').disabled = !enabled; document.getElementById('removePinBtn').style.opacity = enabled ? '1' : '.5'; }
+    function showPinSetup(fromOnboarding = false) { pinSetupFromOnboarding = fromOnboarding; document.getElementById('pinSetupError').classList.add('hidden'); document.getElementById('pinSetupForm').reset(); document.getElementById('pinSetup').classList.remove('hidden'); document.getElementById('pinSetup').classList.add('flex'); document.getElementById('newPin').focus(); }
+    function closePinSetup() { document.getElementById('pinSetup').classList.add('hidden'); document.getElementById('pinSetup').classList.remove('flex'); }
+    function closeSecuritySetup() { document.getElementById('securitySetup').classList.add('hidden'); document.getElementById('securitySetup').classList.remove('flex'); }
+    function showSecuritySetup() { const bridge = nativeSecurity(); const biometricButton = document.getElementById('firstRunBiometricBtn'); const available = Boolean(bridge && bridge.isAvailable && bridge.isAvailable()); biometricButton.classList.toggle('hidden', !available); document.getElementById('securitySetup').classList.remove('hidden'); document.getElementById('securitySetup').classList.add('flex'); }
+    function lockApp() { if (nativeSecurity() && nativeSecurity().isEnabled()) return; if (!pinEnabled()) return; document.getElementById('pinLock').classList.remove('hidden'); document.getElementById('pinLock').classList.add('flex'); document.getElementById('unlockPin').focus(); }
     function toast(message, danger = false) { const root = document.getElementById('toastRoot'); root.innerHTML = `<div class="toast rounded-xl border ${danger ? 'border-rose-400/30 bg-rose-950/90 text-rose-200' : 'border-emerald-400/30 bg-emerald-950/90 text-emerald-200'} px-4 py-3 text-sm shadow-xl">${message}</div>`; setTimeout(() => root.innerHTML = '', 2800); }
     function monthlyFixed() { return state.fixed.reduce((sum, item) => sum + Number(item.amount) * monthlyFactor[item.frequency], 0); }
     function monthlyExpenses() { return state.expenses.filter(x => monthKey(x.date) === currentMonth).reduce((sum, x) => sum + Number(x.amount), 0); }
@@ -193,6 +270,39 @@
     function investedThisMonth() {
       return state.expenses.filter(x => monthKey(x.date) === currentMonth && x.macro === 'Risparmio/Investimento').reduce((s, x) => s + Number(x.amount), 0);
     }
+    function shiftMonth(base, delta) { const [y, m] = base.split('-').map(Number); const d = new Date(y, m - 1 + delta, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; }
+    function monthLabelText(monthStr) { const label = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' }).format(new Date(`${monthStr}-01T00:00:00`)); return label.charAt(0).toUpperCase() + label.slice(1); }
+    function monthTotals(monthStr) {
+      const variable = state.expenses.filter(x => monthKey(x.date) === monthStr).reduce((s, x) => s + Number(x.amount), 0);
+      return { income: Number(state.income) || 0, variable, fixed: monthlyFixed(), expenses: variable + monthlyFixed() };
+    }
+    function updateHistorySnapshot(cash, investments, expenses) {
+      state.history[currentMonth] = { cash, investments, expenses, income: Number(state.income) || 0, netWorth: cash + investments - expenses, updatedAt: Date.now() };
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    }
+    function renderHistoryChart() {
+      const entries = Object.entries(state.history || {}).sort((a, b) => a[0].localeCompare(b[0])).slice(-12);
+      const labels = entries.map(([m]) => new Intl.DateTimeFormat('it-IT', { month: 'short', year: '2-digit' }).format(new Date(`${m}-01T00:00:00`)));
+      const data = entries.map(([, v]) => v.netWorth);
+      if (historyChart) historyChart.destroy();
+      historyChart = new Chart(document.getElementById('historyChart'), { type: 'line', data: { labels, datasets: [{ label: 'Patrimonio netto', data, borderColor: '#8b5cf6', backgroundColor: 'rgba(139,92,246,.18)', fill: true, tension: .35, pointRadius: 3, pointBackgroundColor: '#c4b5fd' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => euro(ctx.parsed.y) } } }, scales: { x: { ticks: { color: '#94a3b8' }, grid: { display: false } }, y: { ticks: { color: '#94a3b8', callback: v => euro(v) }, grid: { color: 'rgba(148,163,184,.12)' } } } } });
+    }
+    function renderMonthModal() {
+      document.getElementById('monthModalTitle').textContent = monthLabelText(modalMonth);
+      const totals = monthTotals(modalMonth);
+      document.getElementById('monthIncomeVal').textContent = euro(totals.income);
+      document.getElementById('monthExpenseVal').textContent = euro(totals.expenses);
+      document.getElementById('monthNoData').classList.toggle('hidden', totals.variable > 0);
+      if (monthChart) monthChart.destroy();
+      monthChart = new Chart(document.getElementById('monthChart'), { type: 'bar', data: { labels: ['Entrate', 'Spese fisse', 'Spese variabili'], datasets: [{ data: [totals.income, totals.fixed, totals.variable], backgroundColor: ['#34d399', '#f59e0b', '#fb7185'], borderRadius: 8 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => euro(ctx.parsed.y) } } }, scales: { x: { ticks: { color: '#cbd5e1' }, grid: { display: false } }, y: { ticks: { color: '#94a3b8', callback: v => euro(v) }, grid: { color: 'rgba(148,163,184,.12)' } } } } });
+    }
+    function openMonthModal(monthStr) {
+      modalMonth = monthStr || currentMonth;
+      renderMonthModal();
+      document.getElementById('monthModal').classList.remove('hidden');
+      document.getElementById('monthModal').classList.add('flex');
+    }
+    function closeMonthModal() { document.getElementById('monthModal').classList.add('hidden'); document.getElementById('monthModal').classList.remove('flex'); }
     function render() {
       const cash = state.accounts.reduce((s, x) => s + Number(x.balance), 0);
       const investments = state.investments.reduce((s, x) => s + Number(x.value), 0);
@@ -204,9 +314,11 @@
       document.getElementById('dashIncome').textContent = euro(state.income);
       document.getElementById('dashFixed').textContent = euro(monthlyFixed());
       document.getElementById('dashMargin').textContent = euro(state.income - monthlyFixed() - expenses);
-      document.getElementById('monthLabel').textContent = new Intl.DateTimeFormat('it-IT', { month: 'long', year: 'numeric' }).format(today);
+      document.getElementById('monthLabel').textContent = monthLabelText(currentMonth);
       document.getElementById('incomeInput').value = state.income || '';
-      renderChart(cash, investments, expenses); renderBudget(); renderExpenses(); renderFixed(); renderAccounts(); renderInvestments();
+      updateHistorySnapshot(cash, investments, expenses);
+      renderChart(cash, investments, expenses); renderBudget(); renderExpenses(); renderFixed(); renderAccounts(); renderInvestments(); renderHistoryChart();
+      if (!document.getElementById('monthModal').classList.contains('hidden')) renderMonthModal();
     }
     function renderChart(cash, investments, expenses) {
       if (wealthChart) wealthChart.destroy();
@@ -223,42 +335,98 @@
     function renderExpenses() {
       const items = [...state.expenses].sort((a, b) => b.date.localeCompare(a.date));
       document.getElementById('expenseTotal').textContent = `${items.length} movimenti · ${euro(monthlyExpenses())} questo mese`;
-      document.getElementById('expenseList').innerHTML = items.length ? items.map(x => `<div class="flex items-center justify-between gap-3 rounded-xl bg-slate-900/70 p-3"><div class="min-w-0"><p class="truncate font-semibold">${esc(x.category)} <span class="ml-1 rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-normal text-slate-400">${esc(x.macro)}</span></p><p class="text-xs text-slate-500">${x.date}${x.note ? ` · ${esc(x.note)}` : ''}</p></div><div class="flex items-center gap-2"><b class="whitespace-nowrap text-rose-300">− ${euro(x.amount)}</b><button class="btn btn-danger px-3 text-xs" data-delete="expense" data-id="${x.id}">Elimina</button></div></div>`).join('') : empty('Nessuna spesa registrata.');
+      document.getElementById('expenseList').innerHTML = items.length ? items.map(x => `<div class="flex items-center justify-between gap-3 rounded-xl bg-slate-900/70 p-3"><div class="min-w-0"><p class="truncate font-semibold">${esc(x.category)} <span class="ml-1 rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-normal text-slate-400">${esc(x.macro)}</span></p><p class="text-xs text-slate-500">${x.date}${x.note ? ` · ${esc(x.note)}` : ''}</p></div><div class="flex flex-wrap items-center justify-end gap-2"><b class="whitespace-nowrap text-rose-300">− ${euro(x.amount)}</b><button class="btn btn-quiet px-3 text-xs text-amber-200" data-edit="expense" data-id="${x.id}">Modifica</button><button class="btn btn-danger px-3 text-xs" data-delete="expense" data-id="${x.id}">Elimina</button></div></div>`).join('') : empty('Nessuna spesa registrata.');
     }
     function renderFixed() {
       const m = monthlyFixed(); document.getElementById('fixedMonthly').textContent = euro(m); document.getElementById('fixedAnnual').textContent = euro(m * 12);
-      document.getElementById('fixedList').innerHTML = state.fixed.length ? state.fixed.map(x => `<div class="glass rounded-2xl p-4"><div class="flex items-start justify-between gap-3"><div><h3 class="font-bold">${esc(x.name)}</h3><p class="mt-1 text-xs text-slate-400">${esc(x.category)} · ${esc(x.macro)} · giorno ${x.day}</p></div><button class="btn btn-danger px-3 text-xs" data-delete="fixed" data-id="${x.id}">Elimina</button></div><div class="mt-3 flex flex-wrap items-center justify-between gap-2"><span class="text-sm">${euro(x.amount)} · ${frequencyLabel[x.frequency]} <b class="text-violet-300">(${euro(x.amount * monthlyFactor[x.frequency])}/mese)</b></span><button class="btn btn-quiet text-xs" data-pay="${x.id}">✓ Segna pagata questo mese</button></div></div>`).join('') : empty('Nessuna spesa fissa attiva.');
+      document.getElementById('fixedList').innerHTML = state.fixed.length ? state.fixed.map(x => `<div class="glass rounded-2xl p-4"><div class="flex items-start justify-between gap-3"><div><h3 class="font-bold">${esc(x.name)}</h3><p class="mt-1 text-xs text-slate-400">${esc(x.category)} · ${esc(x.macro)} · giorno ${x.day}</p></div><div class="flex gap-2"><button class="btn btn-quiet px-3 text-xs text-amber-200" data-edit="fixed" data-id="${x.id}">Modifica</button><button class="btn btn-danger px-3 text-xs" data-delete="fixed" data-id="${x.id}">Elimina</button></div></div><div class="mt-3 flex flex-wrap items-center justify-between gap-2"><span class="text-sm">${euro(x.amount)} · ${frequencyLabel[x.frequency]} <b class="text-violet-300">(${euro(x.amount * monthlyFactor[x.frequency])}/mese)</b></span><button class="btn btn-quiet text-xs" data-pay="${x.id}">✓ Segna pagata questo mese</button></div></div>`).join('') : empty('Nessuna spesa fissa attiva.');
     }
-    function renderAccounts() { document.getElementById('accountList').innerHTML = state.accounts.length ? state.accounts.map(x => `<div class="glass flex items-center justify-between rounded-2xl p-4"><div><p class="font-semibold">${esc(x.name)}</p><p class="text-xs text-slate-500">Liquidità disponibile</p></div><div class="flex items-center gap-2"><b class="text-emerald-300">${euro(x.balance)}</b><button class="btn btn-quiet px-3 text-xs text-amber-200" data-edit-account="${x.id}">Modifica</button><button class="btn btn-danger px-3 text-xs" data-delete="account" data-id="${x.id}">×</button></div></div>`).join('') : empty('Aggiungi il tuo primo conto.'); }
-    function renderInvestments() { document.getElementById('investmentList').innerHTML = state.investments.length ? state.investments.map(x => { const cost = Number(x.quantity) * Number(x.cost), pnl = Number(x.value) - cost, pct = cost ? pnl / cost * 100 : 0; return `<div class="glass rounded-2xl p-4"><div class="flex items-start justify-between"><div><h3 class="font-bold">${esc(x.name)}</h3><p class="text-xs text-slate-500">${x.quantity} unità · PMC ${euro(x.cost)}</p></div><button class="btn btn-danger px-3 text-xs" data-delete="investment" data-id="${x.id}">Elimina</button></div><div class="mt-3 grid grid-cols-2 gap-2 text-sm"><div><span class="block text-xs text-slate-500">Valore attuale</span><b>${euro(x.value)}</b></div><div><span class="block text-xs text-slate-500">Profit / Loss</span><b class="${pnl >= 0 ? 'text-emerald-300' : 'text-rose-300'}">${pnl >= 0 ? '+' : ''}${euro(pnl)} (${pnl >= 0 ? '+' : ''}${pct.toFixed(2)}%)</b></div></div></div>`; }).join('') : empty('Nessun asset in portafoglio.'); }
+    function renderAccounts() { document.getElementById('accountList').innerHTML = state.accounts.length ? state.accounts.map(x => `<div class="glass flex items-center justify-between rounded-2xl p-4"><div><p class="font-semibold">${esc(x.name)}</p><p class="text-xs text-slate-500">Liquidità disponibile</p></div><div class="flex items-center gap-2"><b class="text-emerald-300">${euro(x.balance)}</b><button class="btn btn-quiet px-3 text-xs text-amber-200" data-edit="account" data-id="${x.id}">Modifica</button><button class="btn btn-danger px-3 text-xs" data-delete="account" data-id="${x.id}">×</button></div></div>`).join('') : empty('Aggiungi il tuo primo conto.'); }
+    function renderInvestments() { document.getElementById('investmentList').innerHTML = state.investments.length ? state.investments.map(x => { const cost = Number(x.quantity) * Number(x.cost), pnl = Number(x.value) - cost, pct = cost ? pnl / cost * 100 : 0; return `<div class="glass rounded-2xl p-4"><div class="flex items-start justify-between"><div><h3 class="font-bold">${esc(x.name)}</h3><p class="text-xs text-slate-500">${x.quantity} unità · PMC ${euro(x.cost)}</p></div><div class="flex gap-2"><button class="btn btn-quiet px-3 text-xs text-amber-200" data-edit="investment" data-id="${x.id}">Modifica</button><button class="btn btn-danger px-3 text-xs" data-delete="investment" data-id="${x.id}">Elimina</button></div></div><div class="mt-3 grid grid-cols-2 gap-2 text-sm"><div><span class="block text-xs text-slate-500">Valore attuale</span><b>${euro(x.value)}</b></div><div><span class="block text-xs text-slate-500">Profit / Loss</span><b class="${pnl >= 0 ? 'text-emerald-300' : 'text-rose-300'}">${pnl >= 0 ? '+' : ''}${euro(pnl)} (${pnl >= 0 ? '+' : ''}${pct.toFixed(2)}%)</b></div></div></div>`; }).join('') : empty('Nessun asset in portafoglio.'); }
     function empty(text) { return `<p class="rounded-xl border border-dashed border-slate-700 p-5 text-center text-sm text-slate-500">${text}</p>`; }
     function esc(value) { return String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
     function formData(form) { return Object.fromEntries(new FormData(form).entries()); }
     function addExpense(data) { state.expenses.push({ ...data, id: id(), amount: Number(data.amount) }); save(); }
+    function setFormMode(form, editing, submitId, cancelId, addLabel, editLabel) {
+      form.dataset.editing = editing || '';
+      document.getElementById(submitId).textContent = editing ? editLabel : addLabel;
+      document.getElementById(cancelId).classList.toggle('hidden', !editing);
+    }
+    function startEdit(type, itemId) {
+      const config = {
+        expense: ['expenses', 'expenseForm', 'expenseSubmit', 'expenseCancelEdit', '+ Aggiungi spesa', 'Salva modifica', ['amount', 'category', 'date', 'macro', 'note']],
+        fixed: ['fixed', 'fixedForm', 'fixedSubmit', 'fixedCancelEdit', '+ Aggiungi spesa fissa', 'Salva modifica', ['name', 'amount', 'frequency', 'day', 'category', 'macro']],
+        account: ['accounts', 'accountForm', 'accountSubmit', 'accountCancelEdit', '+ Aggiungi conto', 'Salva modifica', ['name', 'balance']],
+        investment: ['investments', 'investmentForm', 'investmentSubmit', 'investmentCancelEdit', '+ Aggiungi asset', 'Salva modifica', ['name', 'quantity', 'cost', 'value']]
+      }[type];
+      if (!config) return;
+      const item = state[config[0]].find(x => x.id === itemId);
+      if (!item) return;
+      const form = document.getElementById(config[1]);
+      config[6].forEach(name => { form.elements[name].value = item[name] ?? ''; });
+      setFormMode(form, itemId, config[2], config[3], config[4], config[5]);
+      form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    function cancelEdit(formId, submitId, cancelId, addLabel) {
+      const form = document.getElementById(formId);
+      form.reset(); form.dataset.editing = '';
+      document.getElementById(submitId).textContent = addLabel;
+      document.getElementById(cancelId).classList.add('hidden');
+      if (formId === 'expenseForm') form.elements.date.value = today.toISOString().slice(0, 10);
+    }
     document.querySelectorAll('.nav-item').forEach(btn => btn.addEventListener('click', () => { document.querySelectorAll('.section').forEach(s => s.classList.toggle('active', s.id === btn.dataset.section)); document.querySelectorAll('.nav-item').forEach(n => n.classList.toggle('active', n === btn)); window.scrollTo({ top: 0, behavior: 'smooth' }); }));
     document.querySelector('#expenseForm [name=date]').value = today.toISOString().slice(0, 10);
-    document.getElementById('expenseForm').addEventListener('submit', e => { e.preventDefault(); addExpense(formData(e.target)); e.target.reset(); e.target.querySelector('[name=date]').value = today.toISOString().slice(0, 10); toast('Spesa aggiunta'); });
-    document.getElementById('fixedForm').addEventListener('submit', e => { e.preventDefault(); state.fixed.push({ ...formData(e.target), id: id(), amount: Number(formData(e.target).amount), day: Number(formData(e.target).day) }); save(); e.target.reset(); toast('Spesa fissa aggiunta'); });
-    document.getElementById('accountForm').addEventListener('submit', e => { e.preventDefault(); const d = formData(e.target); state.accounts.push({ ...d, id: id(), balance: Number(d.balance) }); save(); e.target.reset(); toast('Conto aggiunto'); });
-    document.getElementById('investmentForm').addEventListener('submit', e => { e.preventDefault(); const d = formData(e.target); state.investments.push({ ...d, id: id(), quantity: Number(d.quantity), cost: Number(d.cost), value: Number(d.value) }); save(); e.target.reset(); toast('Asset aggiunto'); });
+    document.getElementById('expenseForm').addEventListener('submit', e => { e.preventDefault(); const d = formData(e.target); const item = state.expenses.find(x => x.id === e.target.dataset.editing); if (item) Object.assign(item, { ...d, amount: Number(d.amount) }); else addExpense(d); cancelEdit('expenseForm', 'expenseSubmit', 'expenseCancelEdit', '+ Aggiungi spesa'); save(); toast(item ? 'Spesa aggiornata' : 'Spesa aggiunta'); });
+    document.getElementById('fixedForm').addEventListener('submit', e => { e.preventDefault(); const d = formData(e.target); const item = state.fixed.find(x => x.id === e.target.dataset.editing); if (item) Object.assign(item, { ...d, amount: Number(d.amount), day: Number(d.day) }); else state.fixed.push({ ...d, id: id(), amount: Number(d.amount), day: Number(d.day) }); save(); cancelEdit('fixedForm', 'fixedSubmit', 'fixedCancelEdit', '+ Aggiungi spesa fissa'); toast(item ? 'Spesa fissa aggiornata' : 'Spesa fissa aggiunta'); });
+    document.getElementById('accountForm').addEventListener('submit', e => { e.preventDefault(); const d = formData(e.target); const item = state.accounts.find(x => x.id === e.target.dataset.editing); if (item) Object.assign(item, { ...d, balance: Number(d.balance) }); else state.accounts.push({ ...d, id: id(), balance: Number(d.balance) }); save(); cancelEdit('accountForm', 'accountSubmit', 'accountCancelEdit', '+ Aggiungi conto'); toast(item ? 'Conto aggiornato' : 'Conto aggiunto'); });
+    document.getElementById('investmentForm').addEventListener('submit', e => { e.preventDefault(); const d = formData(e.target); const item = state.investments.find(x => x.id === e.target.dataset.editing); const values = { ...d, quantity: Number(d.quantity), cost: Number(d.cost), value: Number(d.value) }; if (item) Object.assign(item, values); else state.investments.push({ ...values, id: id() }); save(); cancelEdit('investmentForm', 'investmentSubmit', 'investmentCancelEdit', '+ Aggiungi asset'); toast(item ? 'Asset aggiornato' : 'Asset aggiunto'); });
+    document.getElementById('expenseCancelEdit').addEventListener('click', () => cancelEdit('expenseForm', 'expenseSubmit', 'expenseCancelEdit', '+ Aggiungi spesa'));
+    document.getElementById('fixedCancelEdit').addEventListener('click', () => cancelEdit('fixedForm', 'fixedSubmit', 'fixedCancelEdit', '+ Aggiungi spesa fissa'));
+    document.getElementById('accountCancelEdit').addEventListener('click', () => cancelEdit('accountForm', 'accountSubmit', 'accountCancelEdit', '+ Aggiungi conto'));
+    document.getElementById('investmentCancelEdit').addEventListener('click', () => cancelEdit('investmentForm', 'investmentSubmit', 'investmentCancelEdit', '+ Aggiungi asset'));
     document.getElementById('settingsForm').addEventListener('submit', e => { e.preventDefault(); state.income = Number(document.getElementById('incomeInput').value) || 0; save(); toast('Entrata mensile salvata'); });
     const budgetModal = document.getElementById('budgetModal');
     document.getElementById('budgetSettingsBtn').addEventListener('click', () => { document.getElementById('needsPercent').value = state.budget.needs; document.getElementById('wantsPercent').value = state.budget.wants; document.getElementById('savingsPercent').value = state.budget.savings; budgetModal.classList.remove('hidden'); budgetModal.classList.add('flex'); });
     document.getElementById('closeBudgetModal').addEventListener('click', () => { budgetModal.classList.add('hidden'); budgetModal.classList.remove('flex'); });
+    document.getElementById('monthLabel').addEventListener('click', () => openMonthModal(currentMonth));
+    document.getElementById('closeMonthModal').addEventListener('click', closeMonthModal);
+    document.getElementById('monthModal').addEventListener('click', e => { if (e.target.id === 'monthModal') closeMonthModal(); });
+    document.getElementById('monthPrev').addEventListener('click', () => { modalMonth = shiftMonth(modalMonth, -1); renderMonthModal(); });
+    document.getElementById('monthNext').addEventListener('click', () => { modalMonth = shiftMonth(modalMonth, 1); renderMonthModal(); });
     document.getElementById('budgetForm').addEventListener('submit', e => { e.preventDefault(); const budget = { needs: Number(document.getElementById('needsPercent').value), wants: Number(document.getElementById('wantsPercent').value), savings: Number(document.getElementById('savingsPercent').value) }; if (budget.needs < 0 || budget.wants < 0 || budget.savings < 0 || budget.needs + budget.wants + budget.savings !== 100) { toast('Le percentuali devono sommare a 100%', true); return; } state.budget = budget; save(); budgetModal.classList.add('hidden'); budgetModal.classList.remove('flex'); toast('Regola budget aggiornata'); });
     document.addEventListener('click', e => {
-      const edit = e.target.closest('[data-edit-account]'); if (edit) { const account = state.accounts.find(x => x.id === edit.dataset.editAccount); if (!account) return; const next = prompt(`Nuova liquidità per ${account.name}`, account.balance); if (next !== null && Number.isFinite(Number(next)) && Number(next) >= 0) { account.balance = Number(next); save(); toast('Liquidità aggiornata'); } }
+      const edit = e.target.closest('[data-edit]'); if (edit) { startEdit(edit.dataset.edit, edit.dataset.id); return; }
       const del = e.target.closest('[data-delete]'); if (del) { const { delete: type, id: itemId } = del.dataset; const key = { expense: 'expenses', fixed: 'fixed', account: 'accounts', investment: 'investments' }[type]; state[key] = state[key].filter(x => x.id !== itemId); save(); toast('Elemento eliminato'); }
       const pay = e.target.closest('[data-pay]'); if (pay) { const item = state.fixed.find(x => x.id === pay.dataset.pay); if (item) { addExpense({ amount: item.amount, category: item.category, macro: item.macro, date: today.toISOString().slice(0, 10), note: `${item.name} · ricorrente` }); toast('Pagamento registrato nelle spese'); } }
     });
-    function downloadBackup() { const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `finanza-backup-${currentMonth}.json`; a.click(); URL.revokeObjectURL(a.href); toast('Backup esportato'); }
+    function downloadBackup() { const json = JSON.stringify(state, null, 2); const bridge = nativeSecurity(); if (bridge && bridge.exportBackup) { bridge.exportBackup(json); return; } const blob = new Blob([json], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `finanza-backup-${currentMonth}.json`; a.click(); URL.revokeObjectURL(a.href); toast('Backup esportato'); }
     document.getElementById('exportBtn').addEventListener('click', downloadBackup); document.getElementById('headerExport').addEventListener('click', downloadBackup);
-    document.getElementById('importInput').addEventListener('change', e => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { try { const imported = JSON.parse(reader.result); if (!imported || !Array.isArray(imported.expenses) || !Array.isArray(imported.fixed)) throw new Error(); state = { ...defaultState, ...imported }; save(); toast('Backup ripristinato'); } catch { toast('File JSON non valido', true); } }; reader.readAsText(file); e.target.value = ''; });
+    function importBackupText(text) { try { const imported = JSON.parse(text); if (!imported || !Array.isArray(imported.expenses) || !Array.isArray(imported.fixed)) throw new Error(); state = { ...defaultState, ...imported }; save(); toast('Backup ripristinato'); } catch { toast('File JSON non valido', true); } }
+    window.nativeImportBackupFromAndroid = encoded => { try { importBackupText(atob(encoded)); } catch { toast('Impossibile leggere il backup', true); } };
+    window.addEventListener('nativeBackupExported', () => toast('Backup esportato'));
+    document.getElementById('importInput').addEventListener('click', e => { const bridge = nativeSecurity(); if (bridge && bridge.importBackup) { e.preventDefault(); bridge.importBackup(); } });
+    document.getElementById('importInput').addEventListener('change', e => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => importBackupText(reader.result); reader.readAsText(file); e.target.value = ''; });
     document.getElementById('resetBtn').addEventListener('click', () => { if (confirm('Vuoi cancellare tutti i dati locali?')) { state = { ...defaultState }; save(); toast('Dati cancellati'); } });
+    document.getElementById('setPinBtn').addEventListener('click', () => showPinSetup());
+    document.getElementById('closePinSetup').addEventListener('click', closePinSetup);
+    document.getElementById('pinSetupForm').addEventListener('submit', async e => { e.preventDefault(); const pin = document.getElementById('newPin').value; const confirmPin = document.getElementById('confirmPin').value; const error = document.getElementById('pinSetupError'); if (!/^\d{4,}$/.test(pin) || pin !== confirmPin) { error.textContent = 'Inserisci due volte lo stesso PIN di almeno 4 cifre.'; error.classList.remove('hidden'); return; } try { localStorage.setItem(PIN_KEY, await hashPin(pin)); closePinSetup(); updatePinStatus(); if (pinSetupFromOnboarding) completeSecuritySetup(); pinSetupFromOnboarding = false; toast('Protezione PIN attivata'); } catch (err) { error.textContent = err.message; error.classList.remove('hidden'); } });
+    document.getElementById('removePinBtn').addEventListener('click', () => { if (!pinEnabled()) return; if (confirm('Disattivare la protezione PIN?')) { localStorage.removeItem(PIN_KEY); updatePinStatus(); toast('Protezione PIN disattivata'); } });
+    document.getElementById('biometricBtn').addEventListener('click', () => { const bridge = nativeSecurity(); if (!bridge) return; if (bridge.isEnabled()) { bridge.disable(); toast('Biometria Android disattivata'); } else { bridge.enable(); toast('Conferma la biometria nella finestra Android'); } updateNativeSecurity(); });
+    document.getElementById('firstRunPinBtn').addEventListener('click', () => { closeSecuritySetup(); showPinSetup(true); });
+    document.getElementById('skipSecurityBtn').addEventListener('click', () => { completeSecuritySetup(); toast('Protezione non attivata'); });
+    document.getElementById('firstRunBiometricBtn').addEventListener('click', () => { const bridge = nativeSecurity(); if (!bridge) return; bridge.enable(); toast('Conferma la biometria nella finestra Android'); });
+    window.addEventListener('nativeBiometricUnlocked', () => { if (!securityConfigured()) { completeSecuritySetup(); toast('Protezione biometrica attivata'); } updateNativeSecurity(); });
+    document.getElementById('pinUnlockForm').addEventListener('submit', async e => { e.preventDefault(); const input = document.getElementById('unlockPin'); try { if ((await hashPin(input.value)) === localStorage.getItem(PIN_KEY)) { document.getElementById('pinLock').classList.add('hidden'); document.getElementById('pinLock').classList.remove('flex'); input.value = ''; document.getElementById('pinError').classList.add('hidden'); } else { document.getElementById('pinError').classList.remove('hidden'); input.select(); } } catch { document.getElementById('pinError').textContent = 'Impossibile verificare il PIN in questo contesto.'; document.getElementById('pinError').classList.remove('hidden'); } });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && pinEnabled()) lockApp(); });
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       navigator.serviceWorker.register('./sw.js').catch(() => {});
     }
+    updatePinStatus();
+    updateNativeSecurity();
     render();
+    if (!securityConfigured() && !(nativeSecurity() && nativeSecurity().isEnabled())) showSecuritySetup();
+    if (nativeSecurity() && nativeSecurity().isEnabled() && !securityConfigured()) completeSecuritySetup();
+    lockApp();
   </script>
 </body>
 </html>
